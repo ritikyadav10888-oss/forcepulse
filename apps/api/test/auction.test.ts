@@ -126,8 +126,9 @@ describe("live auction (FR-AUC-09 to 20, AC-10)", () => {
     expect((await as(ownerA).post(`/auctions/${auction.id}/bid`, { teamId: teamA.id }).expect(409)).body.message).toMatch(/quota/);
     await as(ownerB).post(`/auctions/${auction.id}/bid`, { teamId: teamB.id }).expect(200);
     h.clock.advance(31);
-    // A bid after the timer is refused, and the sale stands.
-    expect((await as(ownerA).post(`/auctions/${auction.id}/bid`, { teamId: teamA.id }).expect(409)).body.message).toMatch(/Time ran out/);
+    // A bid after the timer is refused, and the sale stands. (The background timer may close the lot first, so the
+    // message is either "Time ran out" or "No player is on the block"; both refuse the bid.)
+    expect((await as(ownerA).post(`/auctions/${auction.id}/bid`, { teamId: teamA.id }).expect(409)).body.message).toMatch(/Time ran out|No player is on the block/);
     expect((await h.http().get(`/api/v1/auctions/${auction.id}`)).body.lots[1]).toMatchObject({ status: "sold", soldTeamId: teamB.id });
 
     // Lot 3 (Silver): no bids → unsold; it goes round again (FR-AUC-15, FR-AUC-25).
