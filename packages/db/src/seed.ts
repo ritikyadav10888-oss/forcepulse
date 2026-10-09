@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { DEFAULT_PLATFORM_FEE_BPS } from "@force-pulse/shared";
 import type { Db } from "./client";
-import { settings, sports, userRoles, users, type FeeSettings } from "./schema";
+import { auctionPlans, settings, sports, userRoles, users, type FeeSettings } from "./schema";
 
 /**
  * Sports offered at launch. The first 11 match the web app's scoring modules (src/lib/sports);
@@ -40,6 +40,16 @@ export const DEFAULT_FEE_SETTINGS: FeeSettings = {
 export async function seedReferenceData(db: Db): Promise<void> {
   await db.insert(sports).values(SEED_SPORTS).onConflictDoNothing();
   await db.insert(settings).values({ key: FEE_SETTINGS_KEY, value: DEFAULT_FEE_SETTINGS }).onConflictDoNothing();
+  // FR-AUC-21. Prices are still to be decided (SRS 12.3): admin sets them; until then a plan can't be bought.
+  await db
+    .insert(auctionPlans)
+    .values([
+      { id: "starter", name: "Starter", maxTeams: 4 },
+      { id: "standard", name: "Standard", maxTeams: 8 },
+      { id: "pro", name: "Pro", maxTeams: 16 },
+      { id: "premium", name: "Premium", maxTeams: 32 },
+    ])
+    .onConflictDoNothing();
 }
 
 /** Creates the first super admin if no account has that email yet. Returns true when created. */

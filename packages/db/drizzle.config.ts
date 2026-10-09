@@ -5,5 +5,5 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/schema/index.ts",
   out: "./migrations",
-  schemaFilter: ["identity", "people", "competition", "finance", "platform"],
+  schemaFilter: ["identity", "people", "competition", "finance", "platform", "auction"],
 });

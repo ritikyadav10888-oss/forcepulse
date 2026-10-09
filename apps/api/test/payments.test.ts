@@ -234,6 +234,6 @@ describe("late payment and organiser payout by hand (FR-PAY-10, decision 10 Oct 
     expect((await as(admin).get("/admin/payouts/due")).body).toEqual([]);
 
     const money = await as(admin).get("/admin/finance").expect(200);
-    expect(money.body.netRevenuePaise).toBe(money.body.platformFeePaise + money.body.convenienceFeePaise - money.body.gatewayFeePaise);
+    expect(money.body.netRevenuePaise).toBe(money.body.platformFeePaise + money.body.auctionPlanRevenuePaise + money.body.convenienceFeePaise - money.body.gatewayFeePaise);
   });
 });

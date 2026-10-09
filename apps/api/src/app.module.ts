@@ -3,6 +3,8 @@ import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import type { DbHandle } from "@force-pulse/db";
 import { AdminController } from "./admin/admin.controller";
+import { AuctionController } from "./auction/auction.controller";
+import { AuctionService } from "./auction/auction.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { ConsoleOtpSender, type OtpSender } from "./auth/otp-sender";
@@ -71,6 +73,7 @@ export class AppModule {
         FixturesController,
         GalleryController,
         ScoringController,
+        AuctionController,
       ],
       providers: [
         { provide: CONFIG, useValue: deps.config },
@@ -97,6 +100,7 @@ export class AppModule {
         FixturesService,
         ScoringService,
         RealtimeGateway,
+        AuctionService,
       ],
     };
   }

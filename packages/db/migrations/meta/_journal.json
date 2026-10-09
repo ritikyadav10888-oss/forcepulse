@@ -64,6 +64,13 @@
       "when": 1791576383972,
       "tag": "0008_match_events_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791577584812,
+      "tag": "0009_auction",
+      "breakpoints": true
     }
   ]
 }

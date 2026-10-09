@@ -18,6 +18,7 @@ import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
 import type { AuthContext } from "../common/policy";
 import { CLOCK, DB, PAYMENT_GATEWAY, type Clock } from "../common/tokens";
+import { AuctionService } from "../auction/auction.service";
 import { RealtimeGateway } from "../realtime.gateway";
 import { RegistrationsService } from "../registrations/registrations.service";
 import type { GatewayPayment, PaymentGateway } from "./gateway";
@@ -38,6 +39,7 @@ export class PaymentsService {
     private readonly audit: AuditService,
     private readonly registrations: RegistrationsService,
     private readonly realtime: RealtimeGateway,
+    private readonly auctions: AuctionService,
   ) {}
 
   /**
@@ -91,6 +93,29 @@ export class PaymentsService {
     };
   }
 
+  /** Auction plan bought (or upgraded) by the organiser through the same Razorpay flow (FR-PAY-16, FR-AUC-23/24). */
+  async createPlanOrder(auth: AuthContext, auctionId: string, planId: string) {
+    const a = await this.auctions.forAuctioneer(auth, auctionId);
+    const { plan, amount } = await this.auctions.planCharge(auctionId, planId);
+    const paymentId = randomUUID();
+    const order = await this.gateway.createOrder(amount, paymentId, { auctionId, planId, paymentId });
+    await this.db.insert(payments).values({
+      id: paymentId,
+      tournamentId: a.tournamentId,
+      purpose: "auction_plan",
+      auctionId,
+      planId: plan.id,
+      payerUserId: auth.userId,
+      entryFeePaise: amount,
+      platformFeeBps: 10_000,
+      platformFeePaise: amount,
+      organiserSharePaise: 0,
+      razorpayOrderId: order.id,
+      createdAt: this.clock.now(),
+    });
+    return { paymentId, razorpayOrderId: order.id, keyId: this.gateway.keyId, currency: "INR" as const, amountPaise: amount, plan };
+  }
+
   /** Razorpay webhook (FR-PAY-06, NFR-05). Throws only on a bad signature or a real failure, so Razorpay retries. */
   async handleWebhook(rawBody: Buffer | undefined, signature: string | undefined): Promise<{ result: string }> {
     if (!rawBody || !signature || !this.gateway.verifyWebhook(rawBody, signature)) {
@@ -139,8 +164,12 @@ export class PaymentsService {
       const convenience = gp.amount - p.entryFeePaise;
       await postTransaction(tx, [
         { account: "razorpay_clearing", debit: gp.amount, paymentId: p.id, memo: `Payment ${gp.id}` },
-        { account: "organiser_payable", credit: p.organiserSharePaise, tournamentId: p.tournamentId, paymentId: p.id, memo: "Organiser share" },
-        { account: "platform_fee_revenue", credit: p.platformFeePaise, paymentId: p.id, memo: "Platform fee" },
+        ...(p.purpose === "auction_plan"
+          ? [{ account: "auction_plan_revenue" as const, credit: p.entryFeePaise, paymentId: p.id, memo: `Auction plan ${p.planId}` }]
+          : [
+              { account: "organiser_payable" as const, credit: p.organiserSharePaise, tournamentId: p.tournamentId, paymentId: p.id, memo: "Organiser share" },
+              { account: "platform_fee_revenue" as const, credit: p.platformFeePaise, paymentId: p.id, memo: "Platform fee" },
+            ]),
         { account: "convenience_fee_revenue", credit: convenience, paymentId: p.id, memo: "Convenience fee paid by player" },
       ]);
       if (gatewayFee > 0) {
@@ -155,6 +184,11 @@ export class PaymentsService {
         .where(eq(payments.id, p.id))
         .returning();
 
+      if (p.purpose === "auction_plan") {
+        await this.auctions.applyPlan(tx, p.auctionId!, p.planId!);
+        await this.audit.record({ entity: "payment", entityId: p.id, action: "captured", after: { razorpayPaymentId: gp.id, plan: p.planId }, userId: null }, tx);
+        return "captured" as const;
+      }
       const note = await this.confirmEntries(tx, paid);
       if (note) await tx.update(payments).set({ failureReason: note }).where(eq(payments.id, p.id));
       await this.audit.record({ entity: "payment", entityId: p.id, action: "captured", after: { razorpayPaymentId: gp.id, amount: gp.amount, fee: gatewayFee }, userId: null }, tx);
@@ -279,7 +313,7 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
         organiserSharePaise: sql<number>`coalesce(sum(${payments.organiserSharePaise}), 0)::int`,
       })
       .from(payments)
-      .where(and(eq(payments.tournamentId, tournamentId), eq(payments.status, "paid")));
+      .where(and(eq(payments.tournamentId, tournamentId), eq(payments.status, "paid"), eq(payments.purpose, "registration")));
     const schedule = await this.db.select().from(payouts).where(eq(payouts.tournamentId, tournamentId)).orderBy(payouts.sequence);
     const paidOut = schedule.filter((p) => p.status === "paid" || p.status === "processing").reduce((s, p) => s + (p.amountPaise ?? 0), 0);
     return {
@@ -293,7 +327,7 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
   /** Statement CSV: one line per paid payment (FR-PAY-12). */
   async statementCsv(auth: AuthContext, tournamentId: string): Promise<string> {
     await this.tournamentSummary(auth, tournamentId);
-    const rows = await this.db.select().from(payments).where(and(eq(payments.tournamentId, tournamentId), eq(payments.status, "paid"))).orderBy(payments.paidAt);
+    const rows = await this.db.select().from(payments).where(and(eq(payments.tournamentId, tournamentId), eq(payments.status, "paid"), eq(payments.purpose, "registration"))).orderBy(payments.paidAt);
     const header = "Paid at,Razorpay payment,Entry fees (Rs),Platform fee (Rs),Your share (Rs)";
     const rs = (p: number) => (p / 100).toFixed(2);
     return [header, ...rows.map((p) => [p.paidAt!.toISOString(), p.razorpayPaymentId, rs(p.entryFeePaise), rs(p.platformFeePaise), rs(p.organiserSharePaise)].join(","))].join("\r\n") + "\r\n";
@@ -304,8 +338,9 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
       .select({
         paidPayments: sql<number>`count(*) filter (where ${payments.status} = 'paid')::int`,
         collectedPaise: sql<number>`coalesce(sum(${payments.amountPaidPaise}) filter (where ${payments.status} = 'paid'), 0)::int`,
-        entryFeesPaise: sql<number>`coalesce(sum(${payments.entryFeePaise}) filter (where ${payments.status} = 'paid'), 0)::int`,
-        platformFeePaise: sql<number>`coalesce(sum(${payments.platformFeePaise}) filter (where ${payments.status} = 'paid'), 0)::int`,
+        entryFeesPaise: sql<number>`coalesce(sum(${payments.entryFeePaise}) filter (where ${payments.status} = 'paid' and ${payments.purpose} = 'registration'), 0)::int`,
+        platformFeePaise: sql<number>`coalesce(sum(${payments.platformFeePaise}) filter (where ${payments.status} = 'paid' and ${payments.purpose} = 'registration'), 0)::int`,
+        auctionPlanRevenuePaise: sql<number>`coalesce(sum(${payments.entryFeePaise}) filter (where ${payments.status} = 'paid' and ${payments.purpose} = 'auction_plan'), 0)::int`,
         convenienceFeePaise: sql<number>`coalesce(sum(${payments.convenienceFeePaise}) filter (where ${payments.status} = 'paid'), 0)::int`,
         gatewayFeePaise: sql<number>`coalesce(sum(${payments.gatewayFeePaise}) filter (where ${payments.status} = 'paid'), 0)::int`,
         needsAttention: sql<number>`count(*) filter (where ${payments.failureReason} is not null and ${payments.status} = 'paid')::int`,
@@ -320,8 +355,8 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
       .from(payouts);
     return {
       ...t,
-      /** Force Pulse net: platform fee + convenience fees − Razorpay charges. */
-      netRevenuePaise: t.platformFeePaise + t.convenienceFeePaise - t.gatewayFeePaise,
+      /** Force Pulse net: platform fees + auction plans + convenience fees − Razorpay charges. */
+      netRevenuePaise: t.platformFeePaise + t.auctionPlanRevenuePaise + t.convenienceFeePaise - t.gatewayFeePaise,
       payouts: po,
     };
   }

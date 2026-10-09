@@ -74,7 +74,8 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Fixtures and results | `PUT /events/:eventId/format`, `POST /formats/:id/fixtures`, `GET /tournaments/:id/matches`, `GET /tournaments/:id/standings`, `PATCH /matches/:id`, `POST /matches/:id/cancel`, `POST /matches/:id/result` |
 | Gallery | `GET /tournaments/:id/media` (public), `POST /tournaments/:id/media`, `PATCH /media/:id`, `DELETE /media/:id` (organiser; files from `POST /uploads` with `kind=media`) |
 | Scoring | `GET /sports/:id/rules`, `GET/POST /rule-sets`, `POST /matches/:id/start`, `POST /matches/:id/events` (offline sync), `GET /matches/:id/events`, `GET /matches/:id/live` (public), `POST /matches/:id/release-device`, `POST /matches/:id/close` |
-| Live updates (Socket.IO, same port) | Connect with `auth: { token }` (optional). `subscribe` to `match:<id>` → `score.updated`; `tournament:<id>` → `match.updated`, `standings.updated`. Signed-in users get `user:<id>` → `payment.updated` |
+| Auction | `GET /auction-plans`, `POST /tournaments/:id/auctions`, `GET /auctions/:id` (public), `POST /auctions/:id/plan`, `PUT /auctions/:id/config`, `POST /auctions/:id/teams`, `GET /auctions/:id/pool`, `PUT /auctions/:id/lots`, `POST /auctions/:id/start|next|bid|pause|resume|undo|reauction|close`, `GET /auctions/:id/export.csv`; admin `PUT /admin/auction-plans/:id`, `POST /admin/auctions/:id/plan` |
+| Live updates (Socket.IO, same port) | Connect with `auth: { token }` (optional). `subscribe` to `match:<id>` → `score.updated`; `tournament:<id>` → `match.updated`, `standings.updated`; `auction:<id>` → `auction.updated`. Signed-in users get `user:<id>` → `payment.updated` |
 
 ## Payments: how money moves
 

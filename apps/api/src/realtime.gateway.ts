@@ -2,17 +2,17 @@ import { Inject } from "@nestjs/common";
 import { ConnectedSocket, MessageBody, OnGatewayConnection, SubscribeMessage, WebSocketGateway, WebSocketServer } from "@nestjs/websockets";
 import { eq } from "drizzle-orm";
 import type { Server, Socket } from "socket.io";
-import { matches, type Db } from "@force-pulse/db";
+import { auctions, matches, type Db } from "@force-pulse/db";
 import { TokensService } from "./auth/tokens.service";
 import type { AuthContext } from "./common/policy";
 import { DB } from "./common/tokens";
 import { RolesService } from "./roles/roles.service";
 import { TournamentsService } from "./tournaments/tournaments.service";
 
-const ROOM = /^(match|tournament):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+const ROOM = /^(match|tournament|auction):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /**
- * Live updates (NFR-03, System Design 8.1). Rooms: match:<id> and tournament:<id> (public, same visibility as the
+ * Live updates (NFR-03, System Design 8.1). Rooms: match:<id>, tournament:<id> and auction:<id> (public, same visibility as the
  * HTTP pages) and user:<id> (joined on connect with a valid access token). Every message carries full state,
  * so a client that misses one is corrected by the next.
  * shortcut: one API instance; add the Socket.IO Redis adapter when the API runs on more than one server.
@@ -49,7 +49,8 @@ export class RealtimeGateway implements OnGatewayConnection {
     const m = typeof room === "string" ? ROOM.exec(room) : null;
     if (!m) return { ok: false, error: "Unknown room" };
     try {
-      const tournamentId = m[1] === "tournament" ? m[2] : (await this.db.select({ t: matches.tournamentId }).from(matches).where(eq(matches.id, m[2])))[0]?.t;
+      const owner = m[1] === "auction" ? auctions : matches;
+      const tournamentId = m[1] === "tournament" ? m[2] : (await this.db.select({ t: owner.tournamentId }).from(owner).where(eq(owner.id, m[2])))[0]?.t;
       if (!tournamentId) return { ok: false, error: "Not found" };
       await this.tournaments.get(tournamentId, socket.data.auth as AuthContext | undefined); // drafts stay private
       await socket.join(room as string);

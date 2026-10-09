@@ -29,6 +29,10 @@ export const payments = finance.table(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tournamentId: uuid("tournament_id").notNull().references(() => tournaments.id),
+    /** registration: entry fees (3% / 97%). auction_plan: a plan bought by the organiser, all Force Pulse revenue (FR-PAY-16). */
+    purpose: text("purpose").$type<"registration" | "auction_plan">().notNull().default("registration"),
+    auctionId: uuid("auction_id"),
+    planId: text("plan_id"),
     payerUserId: uuid("payer_user_id").notNull().references(() => users.id),
     /** Sum of the entry fees (what the organiser set). */
     entryFeePaise: integer("entry_fee_paise").notNull(),
@@ -68,6 +72,7 @@ export const LEDGER_ACCOUNTS = [
   "platform_fee_revenue",
   "convenience_fee_revenue",
   "gateway_fee_expense",
+  "auction_plan_revenue",
 ] as const;
 export type LedgerAccount = (typeof LEDGER_ACCOUNTS)[number];
 

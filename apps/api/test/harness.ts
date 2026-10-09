@@ -89,7 +89,7 @@ export async function signIn(h: Harness, phone: string) {
   await requestOtp(h, phone).expect(200);
   const code = h.otp.last.get(`+91${phone.slice(-10)}`)!;
   const res = await h.http().post("/api/v1/auth/verify").send({ phone, code }).expect(200);
-  return res.body as { accessToken: string; refreshToken: string; isNewUser: boolean; user: { id: string; roles: string[]; roleLabel: string; platformRole: string } };
+  return res.body as { accessToken: string; refreshToken: string; isNewUser: boolean; user: { id: string; phone: string; roles: string[]; roleLabel: string; platformRole: string } };
 }
 
 export async function staffSignIn(h: Harness) {
