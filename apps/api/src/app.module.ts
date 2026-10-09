@@ -30,6 +30,8 @@ import { PayoutsService } from "./payments/payouts.service";
 import { PincodesController } from "./pincodes.controller";
 import { RegistrationsController } from "./registrations/registrations.controller";
 import { RegistrationsService } from "./registrations/registrations.service";
+import { ScoringController } from "./scoring/scoring.controller";
+import { ScoringService } from "./scoring/scoring.service";
 import { SportsController } from "./sports/sports.controller";
 import { TournamentsController } from "./tournaments/tournaments.controller";
 import { TournamentsService } from "./tournaments/tournaments.service";
@@ -67,6 +69,7 @@ export class AppModule {
         PaymentsController,
         FixturesController,
         GalleryController,
+        ScoringController,
       ],
       providers: [
         { provide: CONFIG, useValue: deps.config },
@@ -91,6 +94,7 @@ export class AppModule {
         PayoutsService,
         PayoutAccountsService,
         FixturesService,
+        ScoringService,
       ],
     };
   }

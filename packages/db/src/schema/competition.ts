@@ -255,6 +255,8 @@ export const formats = competition.table(
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "cascade" }),
     type: text("type").$type<FormatType>().notNull(),
     config: jsonb("config").$type<FormatConfig>().notNull(),
+    /** The organiser's scoring rule set for these matches (FR-SCR-01); frozen onto each match when it starts. */
+    rules: jsonb("rules").$type<Record<string, number | string>>(),
   },
   (t) => [uniqueIndex("formats_event_category").on(t.eventId, sql`coalesce(${t.categoryId}, '00000000-0000-0000-0000-000000000000'::uuid)`)],
 );
@@ -290,6 +292,13 @@ export const matches = competition.table(
     awayScore: integer("away_score"),
     winnerEntrantId: uuid("winner_entrant_id"),
     resultNote: text("result_note"),
+    /** Rules as they were at kick-off, plus the sides and squads the scoring engine needs (FR-SCR-04). */
+    ruleSnapshot: jsonb("rule_snapshot").$type<Record<string, number | string>>(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    /** One scoring device at a time (System Design 6.3): held for 60 s, renewed by every sync. */
+    scorerDeviceId: text("scorer_device_id"),
+    scorerLeaseUntil: timestamp("scorer_lease_until", { withTimezone: true }),
+    playerOfMatchId: uuid("player_of_match_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -310,4 +319,35 @@ export const mediaItems = competition.table(
     createdAt: createdAt(),
   },
   (t) => [index("media_items_tournament").on(t.tournamentId, t.createdAt)],
+);
+
+/** Saved scoring rule sets, reusable across an organiser's tournaments (FR-SCR-03). */
+export const ruleSets = competition.table(
+  "rule_sets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sportId: text("sport_id").notNull().references(() => sports.id),
+    name: text("name").notNull(),
+    config: jsonb("config").$type<Record<string, number | string>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("rule_sets_owner").on(t.ownerUserId, t.sportId)],
+);
+
+/** Append-only scoring events (System Design 6.3). Undo is an event too; nothing is deleted. */
+export const matchEvents = competition.table(
+  "match_events",
+  {
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    /** Made by the scoring device; a resent event with a known id is ignored. */
+    id: uuid("id").notNull().unique(),
+    action: text("action").notNull(),
+    payload: jsonb("payload").$type<Record<string, number | string | boolean | null>>().notNull(),
+    deviceTs: timestamp("device_ts", { withTimezone: true }),
+    serverTs: timestamp("server_ts", { withTimezone: true }).notNull().defaultNow(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [primaryKey({ columns: [t.matchId, t.seq] })],
 );

@@ -6,6 +6,7 @@ import type { Plugin } from "vite";
 export const workspaceAlias = {
   "@force-pulse/shared": path.resolve(__dirname, "packages/shared/src/index.ts"),
   "@force-pulse/db": path.resolve(__dirname, "packages/db/src/index.ts"),
+  "@force-pulse/scoring": path.resolve(__dirname, "packages/scoring/src/index.ts"),
 };
 
 /**

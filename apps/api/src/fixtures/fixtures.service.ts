@@ -15,6 +15,7 @@ import {
   type FormatConfig,
   type FormatType,
 } from "@force-pulse/db";
+import { checkRules } from "@force-pulse/scoring";
 import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
 import { EventBus } from "../common/event-bus";
@@ -47,10 +48,14 @@ export class FixturesService {
   // ---------- Format and generation ----------
 
   /** Sets how a sport (or one category of it) is played. Replaces fixtures that haven't started. */
-  async setFormat(auth: AuthContext, eventId: string, input: { categoryId: string | null; type: FormatType; config: FormatConfig }) {
+  async setFormat(auth: AuthContext, eventId: string, input: { categoryId: string | null; type: FormatType; config: FormatConfig; rules?: Record<string, number | string> | null }) {
     const [event] = await this.db.select().from(tournamentEvents).where(eq(tournamentEvents.id, eventId));
     if (!event) throw new ApiError("NOT_FOUND", "No such sport in a tournament.");
     await this.tournaments.manageable(auth, event.tournamentId);
+    if (input.rules) {
+      const problems = checkRules(event.sportId, input.rules);
+      if (problems.length) throw new ApiError("BAD_REQUEST", problems.join("; "), { problems });
+    }
     if (input.categoryId) {
       const [c] = await this.db.select().from(categories).where(and(eq(categories.id, input.categoryId), eq(categories.eventId, eventId)));
       if (!c) throw new ApiError("BAD_REQUEST", "That category isn't part of this sport.");
@@ -63,10 +68,10 @@ export class FixturesService {
       if (existing) {
         await this.assertNotStarted(tx, existing.id);
         await tx.delete(matches).where(eq(matches.formatId, existing.id));
-        const [row] = await tx.update(formats).set({ type: input.type, config: input.config }).where(eq(formats.id, existing.id)).returning();
+        const [row] = await tx.update(formats).set({ type: input.type, config: input.config, rules: input.rules ?? existing.rules }).where(eq(formats.id, existing.id)).returning();
         return row;
       }
-      const [row] = await tx.insert(formats).values({ tournamentId: event.tournamentId, eventId, categoryId: input.categoryId, type: input.type, config: input.config }).returning();
+      const [row] = await tx.insert(formats).values({ tournamentId: event.tournamentId, eventId, categoryId: input.categoryId, type: input.type, config: input.config, rules: input.rules ?? null }).returning();
       return row;
     });
   }
@@ -272,7 +277,7 @@ export class FixturesService {
   // ---------- Helpers ----------
 
   /** Confirmed teams for team sports; enrolled players' entries for individual ones. */
-  private async entrants(tx: Db, f: FormatRow): Promise<{ id: string; players: string[] }[]> {
+  async entrants(tx: Db, f: FormatRow): Promise<{ id: string; players: string[] }[]> {
     const [event] = await tx.select().from(tournamentEvents).where(eq(tournamentEvents.id, f.eventId));
     const inCategory = (col: typeof teams.categoryId | typeof enrollments.categoryId) => (f.categoryId ? eq(col, f.categoryId) : undefined);
     if (event.entryType === "individual") {
@@ -346,7 +351,7 @@ export class FixturesService {
     if (started.length) throw new ApiError("CONFLICT", "Some matches have been played, so the fixtures can't be regenerated.");
   }
 
-  private async format(id: string, tx: Db = this.db): Promise<FormatRow> {
+  async format(id: string, tx: Db = this.db): Promise<FormatRow> {
     const [f] = await tx.select().from(formats).where(eq(formats.id, id));
     if (!f) throw new ApiError("NOT_FOUND", "No such format.");
     return f;
@@ -359,11 +364,11 @@ export class FixturesService {
   }
 
   /** Display names: team name, or the player's name for an individual entry. */
-  private async names(ids: (string | null)[]): Promise<Map<string, string>> {
+  async names(ids: (string | null)[], tx: Db = this.db): Promise<Map<string, string>> {
     const list = [...new Set(ids.filter((x): x is string => !!x))];
     if (!list.length) return new Map();
-    const t = await this.db.select({ id: teams.id, name: teams.name }).from(teams).where(inArray(teams.id, list));
-    const e = await this.db.select({ id: enrollments.id, name: players.name }).from(enrollments).innerJoin(players, eq(players.id, enrollments.playerId)).where(inArray(enrollments.id, list));
+    const t = await tx.select({ id: teams.id, name: teams.name }).from(teams).where(inArray(teams.id, list));
+    const e = await tx.select({ id: enrollments.id, name: players.name }).from(enrollments).innerJoin(players, eq(players.id, enrollments.playerId)).where(inArray(enrollments.id, list));
     return new Map([...t, ...e].map((x) => [x.id, x.name]));
   }
 

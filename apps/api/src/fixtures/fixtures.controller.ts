@@ -8,6 +8,8 @@ const FormatInput = z
   .object({
     categoryId: z.uuid().nullable().default(null),
     type: z.enum(["league", "knockout", "league_knockout"]),
+    /** Scoring rule set for these matches; checked against the sport's knobs (FR-SCR-01). */
+    rules: z.record(z.string(), z.union([z.number(), z.string()])).nullable().optional(),
     config: z
       .object({
         groups: z.number().int().min(1).max(26).default(1),

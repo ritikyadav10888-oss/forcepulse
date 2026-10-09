@@ -50,6 +50,20 @@
       "when": 1791575938442,
       "tag": "0006_gallery",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791576381096,
+      "tag": "0007_scoring",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791576383972,
+      "tag": "0008_match_events_guard",
+      "breakpoints": true
     }
   ]
 }
