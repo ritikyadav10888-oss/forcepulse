@@ -1,0 +1,25 @@
+{
+  "name": "@force-pulse/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsc -b && node --env-file-if-exists=../../.env dist/cli.js migrate",
+    "seed": "tsc -b && node --env-file-if-exists=../../.env dist/cli.js seed",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@force-pulse/shared": "*",
+    "@electric-sql/pglite": "^0.5.8",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11"
+  }
+}

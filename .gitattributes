@@ -1,0 +1,2 @@
+# Same line endings on every machine. Drizzle checksums migration files, so they must not change.
+* text=auto eol=lf

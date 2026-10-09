@@ -1,0 +1,27 @@
+{
+  "name": "force-pulse-platform",
+  "private": true,
+  "description": "Force Pulse backend: API, database and shared code",
+  "workspaces": [
+    "packages/shared",
+    "packages/db",
+    "apps/api"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/shared packages/db apps/api",
+    "typecheck": "tsc -b packages/shared packages/db apps/api",
+    "test": "npm run test --workspaces --if-present",
+    "dev": "npm run dev -w @force-pulse/api",
+    "db:generate": "npm run generate -w @force-pulse/db",
+    "db:migrate": "npm run migrate -w @force-pulse/db",
+    "db:seed": "npm run seed -w @force-pulse/db"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
