@@ -129,12 +129,11 @@ export class PaymentsController {
     return this.payouts.list(status ? [status] : undefined);
   }
 
-  /** Runs every payout due today. A scheduler calls the same thing daily at 10:00 IST once jobs arrive (week 4). */
-  @Post("admin/payouts/run")
-  @HttpCode(200)
+  /** After a completed tournament's organiser asks to be paid: takes what they are owed and marks it for transfer. */
+  @Post("admin/tournaments/:id/payouts")
   @RequireRole("super_admin")
-  runPayouts(@CurrentAuth() auth: AuthContext) {
-    return this.payouts.runDue(auth.userId);
+  createPayout(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth: AuthContext) {
+    return this.payouts.create(auth.userId, id);
   }
 
   @Post("admin/payouts/:id/mark-paid")

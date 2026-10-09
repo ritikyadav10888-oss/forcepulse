@@ -1,87 +1,55 @@
-import { Inject, Injectable, OnModuleInit } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
+import { Inject, Injectable } from "@nestjs/common";
+import { desc, eq, inArray } from "drizzle-orm";
 import { payoutAccounts, payouts, tournaments, type Db } from "@force-pulse/db";
 import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
-import { EventBus } from "../common/event-bus";
 import { CLOCK, DB, type Clock } from "../common/tokens";
 import { organiserBalance, postTransaction } from "./ledger";
 
 type PayoutRow = typeof payouts.$inferSelect;
 
-/** The date in India (IST, UTC+5:30) as YYYY-MM-DD. Payouts are due by India date. */
-export function indiaDate(at: Date, plusDays = 0): string {
-  return new Date(at.getTime() + 330 * 60_000 + plusDays * 86_400_000).toISOString().slice(0, 10);
+/** The date in India (IST, UTC+5:30) as YYYY-MM-DD. */
+export function indiaDate(at: Date): string {
+  return new Date(at.getTime() + 330 * 60_000).toISOString().slice(0, 10);
 }
 
 /**
- * Organiser payouts (FR-PAY-10, System Design 5.3). Scheduled at registration close + 2 days; the amount is
- * the tournament's organiser-payable ledger balance on the day it runs. Sending is by hand for now
- * (admin records the bank reference) until Razorpay Route or RazorpayX is chosen.
+ * Organiser payouts, by hand (decision 10 Oct 2026): once a tournament is completed the organiser contacts
+ * Force Pulse, staff raise a payout for whatever the ledger owes them, send the bank transfer, then record
+ * its reference. A payment that lands later is simply paid in the next payout.
  */
 @Injectable()
-export class PayoutsService implements OnModuleInit {
+export class PayoutsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly audit: AuditService,
-    private readonly events: EventBus,
   ) {}
 
-  onModuleInit() {
-    this.events.on("RegistrationClosed", (e) => this.schedule(this.db, e.tournamentId, indiaDate(new Date(e.closedAt), 2)).then(() => undefined));
-  }
-
-  /** Adds a scheduled payout unless one is already waiting. */
-  async schedule(tx: Db, tournamentId: string, scheduledOn: string): Promise<void> {
-    const existing = await tx.select().from(payouts).where(eq(payouts.tournamentId, tournamentId)).orderBy(desc(payouts.sequence));
-    if (existing.some((p) => p.status === "scheduled")) return;
-    const [t] = await tx.select({ organiserUserId: tournaments.organiserUserId }).from(tournaments).where(eq(tournaments.id, tournamentId));
-    await tx.insert(payouts).values({ tournamentId, organiserUserId: t.organiserUserId, sequence: (existing[0]?.sequence ?? 0) + 1, scheduledOn });
-  }
-
-  /** A payment landing after a payout already went out is paid in a top-up the next day (System Design 5.3). */
-  async topUpIfAlreadyPaidOut(tx: Db, tournamentId: string): Promise<void> {
-    const rows = await tx.select({ status: payouts.status }).from(payouts).where(eq(payouts.tournamentId, tournamentId));
-    if (rows.some((p) => p.status === "processing" || p.status === "paid")) await this.schedule(tx, tournamentId, indiaDate(this.clock.now(), 1));
-  }
-
-  /** Daily run (10:00 IST in production): every payout due today or earlier. */
-  async runDue(actorId: string | null): Promise<PayoutRow[]> {
-    const today = indiaDate(this.clock.now());
-    const due = await this.db.select().from(payouts).where(and(eq(payouts.status, "scheduled"), lte(payouts.scheduledOn, today))).orderBy(asc(payouts.scheduledOn));
-    const done: PayoutRow[] = [];
-    for (const p of due) done.push(await this.process(p.id, actorId));
-    return done;
-  }
-
-  private process(payoutId: string, actorId: string | null): Promise<PayoutRow> {
+  /** Takes the tournament's organiser-payable balance out of the ledger and marks it as being transferred. */
+  create(actorId: string, tournamentId: string): Promise<PayoutRow> {
     return this.db.transaction(async (tx) => {
-      const [p] = await tx.select().from(payouts).where(eq(payouts.id, payoutId)).for("update");
-      if (p.status !== "scheduled") return p;
+      const [t] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
+      if (!t) throw new ApiError("NOT_FOUND", "No such tournament.");
+      if (t.status !== "completed") throw new ApiError("CONFLICT", "Pay out only after the tournament is completed.");
+      const amount = await organiserBalance(tx, t.id);
+      if (amount <= 0) throw new ApiError("CONFLICT", "Nothing is owed to this organiser.");
+      const [account] = await tx.select().from(payoutAccounts).where(eq(payoutAccounts.userId, t.organiserUserId));
+      if (!account?.verified) throw new ApiError("PAYOUT_ACCOUNT_REQUIRED", "The organiser has no verified bank account.");
+
+      const [last] = await tx.select({ sequence: payouts.sequence }).from(payouts).where(eq(payouts.tournamentId, t.id)).orderBy(desc(payouts.sequence)).limit(1);
       const now = this.clock.now();
-      const amount = await organiserBalance(tx, p.tournamentId);
-      if (amount <= 0) {
-        const [row] = await tx.update(payouts).set({ status: "skipped", amountPaise: 0, processedAt: now }).where(eq(payouts.id, p.id)).returning();
-        return row;
-      }
-      const [account] = await tx.select().from(payoutAccounts).where(eq(payoutAccounts.userId, p.organiserUserId));
-      if (!account?.verified) {
-        const [row] = await tx
-          .update(payouts)
-          .set({ status: "failed", amountPaise: amount, failureReason: "Organiser has no verified bank account", processedAt: now })
-          .where(eq(payouts.id, p.id))
-          .returning();
-        return row;
-      }
-      // The money leaves the organiser's balance now; if the transfer fails it is put back (markFailed).
+      const [p] = await tx
+        .insert(payouts)
+        // scheduledOn holds the India date the payout was raised.
+        .values({ tournamentId: t.id, organiserUserId: t.organiserUserId, sequence: (last?.sequence ?? 0) + 1, scheduledOn: indiaDate(now), amountPaise: amount, status: "processing", processedAt: now })
+        .returning();
       await postTransaction(tx, [
-        { account: "organiser_payable", debit: amount, tournamentId: p.tournamentId, payoutId: p.id, memo: `Payout #${p.sequence}` },
+        { account: "organiser_payable", debit: amount, tournamentId: t.id, payoutId: p.id, memo: `Payout #${p.sequence}` },
         { account: "razorpay_clearing", credit: amount, payoutId: p.id, memo: `Payout #${p.sequence} to ••${account.accountLast4}` },
       ]);
-      const [row] = await tx.update(payouts).set({ status: "processing", amountPaise: amount, processedAt: now }).where(eq(payouts.id, p.id)).returning();
-      await this.audit.record({ entity: "payout", entityId: p.id, action: "process", after: { amount }, userId: actorId }, tx);
-      return row;
+      await this.audit.record({ entity: "payout", entityId: p.id, action: "create", after: { tournamentId: t.id, amount }, userId: actorId }, tx);
+      return p;
     });
   }
 
@@ -96,7 +64,7 @@ export class PayoutsService implements OnModuleInit {
     });
   }
 
-  /** The bank transfer failed: the amount goes back to the organiser's balance, and a new payout is scheduled for tomorrow. */
+  /** The bank transfer failed: the amount goes back to the organiser's balance, ready for a new payout. */
   async markFailed(actorId: string, payoutId: string, reason: string): Promise<PayoutRow> {
     return this.db.transaction(async (tx) => {
       const [p] = await tx.select().from(payouts).where(eq(payouts.id, payoutId)).for("update");
@@ -108,7 +76,6 @@ export class PayoutsService implements OnModuleInit {
       ]);
       const [row] = await tx.update(payouts).set({ status: "failed", failureReason: reason }).where(eq(payouts.id, p.id)).returning();
       await this.audit.record({ entity: "payout", entityId: p.id, action: "mark_failed", reason, userId: actorId }, tx);
-      await this.schedule(tx, p.tournamentId, indiaDate(this.clock.now(), 1));
       return row;
     });
   }

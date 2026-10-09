@@ -21,7 +21,6 @@ import { CLOCK, DB, PAYMENT_GATEWAY, type Clock } from "../common/tokens";
 import { RegistrationsService } from "../registrations/registrations.service";
 import type { GatewayPayment, PaymentGateway } from "./gateway";
 import { postTransaction } from "./ledger";
-import { indiaDate, PayoutsService } from "./payouts.service";
 
 type PaymentRow = typeof payments.$inferSelect;
 
@@ -37,7 +36,6 @@ export class PaymentsService {
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
     private readonly audit: AuditService,
     private readonly registrations: RegistrationsService,
-    private readonly payouts: PayoutsService,
   ) {}
 
   /**
@@ -158,7 +156,6 @@ export class PaymentsService {
       const note = await this.confirmEntries(tx, paid);
       if (note) await tx.update(payments).set({ failureReason: note }).where(eq(payments.id, p.id));
       await this.audit.record({ entity: "payment", entityId: p.id, action: "captured", after: { razorpayPaymentId: gp.id, amount: gp.amount, fee: gatewayFee }, userId: null }, tx);
-      await this.payouts.topUpIfAlreadyPaidOut(tx, p.tournamentId);
       return "captured" as const;
     });
     return outcome;
@@ -284,7 +281,6 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
       paidOutPaise: paidOut,
       netPayablePaise: totals.organiserSharePaise - paidOut,
       payouts: schedule.map((p) => ({ ...p, createdAt: p.createdAt.toISOString(), processedAt: p.processedAt?.toISOString() ?? null })),
-      today: indiaDate(this.clock.now()),
     };
   }
 
@@ -311,7 +307,6 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
       .from(payments);
     const [po] = await this.db
       .select({
-        scheduled: sql<number>`count(*) filter (where ${payouts.status} = 'scheduled')::int`,
         processing: sql<number>`count(*) filter (where ${payouts.status} = 'processing')::int`,
         paidPaise: sql<number>`coalesce(sum(${payouts.amountPaise}) filter (where ${payouts.status} = 'paid'), 0)::int`,
         failed: sql<number>`count(*) filter (where ${payouts.status} = 'failed')::int`,

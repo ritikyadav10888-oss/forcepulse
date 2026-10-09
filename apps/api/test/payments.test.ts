@@ -190,8 +190,8 @@ describe("configuration guard", () => {
 });
 
 // Moves the test clock forward, so it runs last.
-describe("late payment and organiser payout (FR-PAY-10, AC-04)", () => {
-  it("registration closes on 10 Nov → payout of 97% due on 12 Nov; a late payment gets a top-up", async () => {
+describe("late payment and organiser payout by hand (FR-PAY-10, decision 10 Oct 2026)", () => {
+  it("after the tournament is completed, staff pay the organiser 97% and record the bank reference", async () => {
     h.clock.set("2026-11-10T04:00:00Z");
     const { org, t } = await paidTournament({ fee: 100_000 });
     const a = await registerAndOrder(t);
@@ -207,31 +207,24 @@ describe("late payment and organiser payout (FR-PAY-10, AC-04)", () => {
     await webhook(lw.body, lw.signature).expect(200);
     expect((await as(late.player).get("/me/enrollments")).body[0]).toMatchObject({ status: "enrolled", flagged: true });
 
-    h.clock.set("2026-11-10T12:00:00Z"); // 17:30 IST on 10 Nov
-    await as(org).put(`/tournaments/${t.id}/status`, { status: "enrollment_closed" }).expect(200);
-    const fin = await as(org).get(`/tournaments/${t.id}/finance`).expect(200);
-    expect(fin.body.payouts).toEqual([expect.objectContaining({ sequence: 1, scheduledOn: "2026-11-12", status: "scheduled" })]);
-
-    h.clock.set("2026-11-11T05:00:00Z");
     const admin = await staffSignIn(h);
-    expect((await as(admin).post("/admin/payouts/run").expect(200)).body).toEqual([]);
+    await as(org).put(`/tournaments/${t.id}/status`, { status: "enrollment_closed" }).expect(200);
+    expect((await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(409)).body.message).toMatch(/after the tournament is completed/);
+    await as(org).post(`/admin/tournaments/${t.id}/payouts`).expect(403);
 
-    h.clock.set("2026-11-12T04:30:00Z"); // 10:00 IST on 12 Nov
-    const run = await as(admin).post("/admin/payouts/run").expect(200);
-    expect(run.body).toEqual([expect.objectContaining({ status: "processing", amountPaise: 3 * 97_000 })]);
-    await as(admin).post(`/admin/payouts/${run.body[0].id}/mark-paid`, { reference: "UTR123456789" }).expect(200);
+    for (const status of ["fixtures_published", "live", "completed"]) await as(org).put(`/tournaments/${t.id}/status`, { status }).expect(200);
 
-    // Another payment lands after the payout: a top-up is scheduled for the next day.
-    await as(org).put(`/tournaments/${t.id}/status`, { status: "enrollment_open" }).expect(200);
-    const after = await registerAndOrder(t);
-    const aw = h.gateway.pay(after.order.razorpayOrderId).webhook;
-    await webhook(aw.body, aw.signature).expect(200);
-    const fin2 = await as(org).get(`/tournaments/${t.id}/finance`).expect(200);
-    expect(fin2.body.payouts.map((p: { sequence: number; status: string; scheduledOn: string }) => [p.sequence, p.status, p.scheduledOn])).toEqual([
-      [1, "paid", "2026-11-12"],
-      [2, "scheduled", "2026-11-13"],
-    ]);
-    expect(fin2.body.netPayablePaise).toBe(97_000);
+    // A failed transfer puts the money back; the next payout takes it again.
+    const first = await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(201);
+    expect(first.body).toMatchObject({ sequence: 1, status: "processing", amountPaise: 3 * 97_000 });
+    await as(admin).post(`/admin/payouts/${first.body.id}/mark-failed`, { reason: "Wrong IFSC" }).expect(200);
+    const second = await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(201);
+    expect(second.body).toMatchObject({ sequence: 2, amountPaise: 3 * 97_000 });
+    await as(admin).post(`/admin/payouts/${second.body.id}/mark-paid`, { reference: "UTR123456789" }).expect(200);
+
+    const fin = await as(org).get(`/tournaments/${t.id}/finance`).expect(200);
+    expect(fin.body).toMatchObject({ organiserSharePaise: 3 * 97_000, paidOutPaise: 3 * 97_000, netPayablePaise: 0 });
+    expect((await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(409)).body.message).toMatch(/Nothing is owed/);
 
     const money = await as(admin).get("/admin/finance").expect(200);
     expect(money.body.netRevenuePaise).toBe(money.body.platformFeePaise + money.body.convenienceFeePaise - money.body.gatewayFeePaise);

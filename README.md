@@ -69,7 +69,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Files and pincodes | `POST /uploads` (multipart: `file`, `kind`), `GET /uploads/:key`, `GET /pincodes/:pincode` |
 | Payments | `POST /payments/orders`, `POST /payments/webhook` (Razorpay, signature-checked), `POST /payments/confirm`, `GET /me/payments`, `GET /payments/:id`, `GET /payments/:id/receipt` |
 | Organiser money | `GET/PUT /payout-accounts/me`, `GET /tournaments/:id/finance`, `GET /tournaments/:id/statement.csv` |
-| Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts`, `POST /admin/payouts/run`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
+| Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts`, `POST /admin/tournaments/:id/payouts`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
 
 ## Payments: how money moves
 
@@ -83,4 +83,4 @@ On a ₹1,000 entry fee paid by card (SRS v2 4.1):
 | Convenience fee (paid by player) | ₹23.60 | Credit convenience fee revenue |
 | Razorpay charge | ₹23.60 | Debit gateway fee expense, credit Razorpay clearing |
 
-A payment counts only when Razorpay's signed webhook says so, or when the server fetches it from Razorpay after Checkout. Payouts are scheduled at registration close + 2 days (India date) and are the organiser-payable balance on that day. Until Route or RazorpayX is chosen, staff send the transfer and record the bank reference.
+A payment counts only when Razorpay's signed webhook says so, or when the server fetches it from Razorpay after Checkout. Payouts are manual: once a tournament is completed and its organiser asks, staff raise a payout of the organiser-payable balance, send the bank transfer, and record its reference.
