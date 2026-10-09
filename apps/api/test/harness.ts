@@ -2,6 +2,7 @@ import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { ensureSuperAdmin, migrateDb, openDb, seedReferenceData, type DbHandle } from "@force-pulse/db";
 import type { OtpSender } from "../src/auth/otp-sender";
+import { MemoryFileStore } from "../src/uploads/file-store";
 import type { Clock } from "../src/common/tokens";
 import { loadConfig } from "../src/config";
 import { createApp } from "../src/create-app";
@@ -50,7 +51,7 @@ export async function startHarness(): Promise<Harness> {
     JWT_SECRET: "test-jwt-secret-0123456789-0123456789",
     OTP_SECRET: "test-otp-secret-0123456789-0123456789",
   });
-  const app = await createApp({ config, db, clock, otpSender: otp });
+  const app = await createApp({ config, db, clock, otpSender: otp, fileStore: new MemoryFileStore() });
   await app.init();
   return {
     app,

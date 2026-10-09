@@ -10,6 +10,7 @@ const schema = z.object({
   OTP_SECRET: z.string().min(32, "OTP_SECRET must be at least 32 characters"),
   OTP_PROVIDER: z.enum(["console"]).default("console"),
   WEB_ORIGIN: z.string().default("http://localhost:3000"),
+  UPLOAD_DIR: z.string().default(".data/uploads"),
 });
 
 export interface AppConfig {
@@ -20,6 +21,8 @@ export interface AppConfig {
   otpSecret: string;
   otpProvider: "console";
   webOrigins: string[];
+  /** Local folder for uploaded files (development; S3 later). */
+  uploadDir: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -41,5 +44,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     otpSecret: c.OTP_SECRET,
     otpProvider: c.OTP_PROVIDER,
     webOrigins: c.WEB_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean),
+    uploadDir: c.UPLOAD_DIR,
   };
 }

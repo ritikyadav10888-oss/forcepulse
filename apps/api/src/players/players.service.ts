@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { players, playerSports, sports, type Db } from "@force-pulse/db";
+import { ageOn } from "@force-pulse/shared";
 import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
 import type { AuthContext } from "../common/policy";
@@ -106,8 +107,12 @@ export class PlayersService {
     return row;
   }
 
+  private today() {
+    return this.clock.now().toISOString().slice(0, 10);
+  }
+
   private checkDob(dob: string) {
-    const age = ageOn(dob, this.clock.now());
+    const age = ageOn(dob, this.today());
     if (age === null || age < 3 || age > 100) throw new ApiError("BAD_REQUEST", "dob: enter a real date of birth.");
   }
 
@@ -120,7 +125,7 @@ export class PlayersService {
       photoUrl: row.photoUrl,
       gender: row.gender,
       dob: privateView ? row.dob : null,
-      age: row.dob ? ageOn(row.dob, this.clock.now()) : null,
+      age: row.dob ? ageOn(row.dob, this.today()) : null,
       pincode: privateView ? row.pincode : null,
       city: row.city,
       state: row.state,
@@ -130,12 +135,3 @@ export class PlayersService {
   }
 }
 
-/** Completed years on a date. Null for an unreadable date. */
-export function ageOn(dob: string, on: Date): number | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
-  if (!m) return null;
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  let age = on.getUTCFullYear() - y;
-  if (on.getUTCMonth() + 1 < mo || (on.getUTCMonth() + 1 === mo && on.getUTCDate() < d)) age--;
-  return age;
-}

@@ -36,3 +36,11 @@ export const playerSports = people.table(
   },
   (t) => [primaryKey({ columns: [t.playerId, t.sportId] })],
 );
+
+/** India Post pincode directory (FR-REG-05). One row per pincode; loaded with `npm run load-pincodes`. */
+export const pincodes = people.table("pincodes", {
+  pincode: text("pincode").primaryKey(),
+  city: text("city").notNull(),
+  district: text("district").notNull(),
+  state: text("state").notNull(),
+});

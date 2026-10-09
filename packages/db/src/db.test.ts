@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { auditLogs, ensureSuperAdmin, migrateDb, openDb, seedReferenceData, settings, sports, userRoles, users, type DbHandle } from "./index";
+import { auditLogs, enrollments, ensureSuperAdmin, migrateDb, openDb, parsePincodeCsv, players, seedReferenceData, settings, sports, tournamentEvents, tournaments, userRoles, users, type DbHandle } from "./index";
 
 let handle: DbHandle;
 
@@ -44,5 +44,40 @@ describe("database guards", () => {
     await expect(handle.db.delete(auditLogs).where(eq(auditLogs.id, row.id))).rejects.toThrow();
     const [{ n }] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(auditLogs);
     expect(n).toBe(1);
+  });
+});
+
+describe("pincodes (FR-REG-05)", () => {
+  it("keeps one row per pincode from the India Post CSV, with quoted fields", () => {
+    const csv = [
+      "circlename,regionname,divisionname,officename,pincode,officetype,delivery,district,statename,latitude,longitude",
+      'Maharashtra Circle,Mumbai Region,Mumbai GPO,"Mumbai G.P.O., Fort",400001,H.O,Delivery,MUMBAI,MAHARASHTRA,18.9,72.8',
+      "Maharashtra Circle,Mumbai Region,Mumbai GPO,Bazargate S.O,400001,S.O,Delivery,MUMBAI,MAHARASHTRA,18.9,72.8",
+      "Karnataka Circle,Bangalore,Bangalore GPO,Bangalore G.P.O.,560001,H.O,Delivery,BENGALURU URBAN,KARNATAKA,12.9,77.5",
+      "bad,row,,,12345,,,,,,",
+    ].join("\n");
+    expect(parsePincodeCsv(csv)).toEqual([
+      { pincode: "400001", city: "Mumbai", district: "Mumbai", state: "Maharashtra" },
+      { pincode: "560001", city: "Bengaluru Urban", district: "Bengaluru Urban", state: "Karnataka" },
+    ]);
+  });
+});
+
+describe("one live entry per player per sport (SRS gap 6)", () => {
+  it("blocks a second live entry but allows a new one after expiry", async () => {
+    const db = handle.db;
+    const [u] = await db.insert(users).values({ phone: "+919800000077" }).returning();
+    const [p] = await db.insert(players).values({ userId: u.id, playerCode: "FPTEST01" }).returning();
+    const [t] = await db
+      .insert(tournaments)
+      .values({ organiserUserId: u.id, slug: "gap-6", name: "Gap 6", startsAt: new Date("2026-11-01"), endsAt: new Date("2026-11-02") })
+      .returning();
+    const [e] = await db.insert(tournamentEvents).values({ tournamentId: t.id, sportId: "badminton", entryType: "individual" }).returning();
+    const entry = { tournamentId: t.id, eventId: e.id, playerId: p.id, paymentStatus: "pending" as const };
+
+    await db.insert(enrollments).values({ ...entry, registrationNo: "R1", status: "payment_pending" });
+    await expect(db.insert(enrollments).values({ ...entry, registrationNo: "R2", status: "enrolled" })).rejects.toThrow();
+    await db.update(enrollments).set({ status: "expired" }).where(eq(enrollments.registrationNo, "R1"));
+    await db.insert(enrollments).values({ ...entry, registrationNo: "R3", status: "payment_pending" });
   });
 });

@@ -9,7 +9,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsc -b && node --env-file-if-exists=../../.env dist/cli.js migrate",
     "seed": "tsc -b && node --env-file-if-exists=../../.env dist/cli.js seed",
-    "test": "vitest run"
+    "test": "vitest run",
+    "load-pincodes": "tsc -b && node --env-file-if-exists=../../.env dist/cli.js load-pincodes"
   },
   "dependencies": {
     "@force-pulse/shared": "*",

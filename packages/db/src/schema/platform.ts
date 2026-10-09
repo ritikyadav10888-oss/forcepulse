@@ -1,4 +1,4 @@
-import { bigserial, index, jsonb, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, index, integer, jsonb, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./identity";
 
 export const platform = pgSchema("platform");
@@ -19,3 +19,14 @@ export const auditLogs = platform.table(
   },
   (t) => [index("audit_logs_entity").on(t.entity, t.entityId), index("audit_logs_at").on(t.at)],
 );
+
+/** Files people upload (photos, age proofs, documents). The bytes live in storage; this row says who may see them. */
+export const uploads = platform.table("uploads", {
+  key: text("key").primaryKey(), // "upl_…"
+  ownerUserId: uuid("owner_user_id").references(() => users.id, { onDelete: "set null" }),
+  /** photo: shown publicly · proof / file: owner, staff and the organiser of a tournament it was submitted to. */
+  kind: text("kind").$type<"photo" | "proof" | "file">().notNull(),
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

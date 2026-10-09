@@ -6,7 +6,9 @@ import { Injectable, Logger } from "@nestjs/common";
 export type DomainEvent =
   | { type: "TournamentCreated"; tournamentId: string; organiserUserId: string }
   | { type: "ScorerAssigned"; matchId: string; scorerUserId: string }
-  | { type: "MatchStartedBy"; matchId: string; userId: string };
+  | { type: "MatchStartedBy"; matchId: string; userId: string }
+  /** Payments schedules the organiser payout at close + 2 days (week 3). */
+  | { type: "RegistrationClosed"; tournamentId: string; closedAt: string };
 
 type Handler<T extends DomainEvent["type"]> = (event: Extract<DomainEvent, { type: T }>) => Promise<void> | void;
 

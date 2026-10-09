@@ -1,5 +1,5 @@
-// npm run migrate | npm run seed   (reads DATABASE_URL and SEED_* from the repo's .env)
-import { ensureSuperAdmin, migrateDb, openDb, seedReferenceData } from "./index";
+// npm run migrate | npm run seed | npm run load-pincodes -- <file.csv>   (reads DATABASE_URL and SEED_* from the repo's .env)
+import { ensureSuperAdmin, loadPincodes, migrateDb, openDb, seedReferenceData } from "./index";
 
 async function main() {
   const command = process.argv[2];
@@ -15,6 +15,10 @@ async function main() {
         console.log(created ? `Super admin created: ${email}` : `Super admin already exists: ${email}`);
       }
       console.log("Seed done.");
+    } else if (command === "load-pincodes") {
+      const file = process.argv[3];
+      if (!file) throw new Error("Usage: npm run load-pincodes -- <path to India Post pincode CSV>");
+      console.log(`Loaded ${await loadPincodes(handle.db, file)} pincodes.`);
     } else {
       console.log("Migrations applied.");
     }
