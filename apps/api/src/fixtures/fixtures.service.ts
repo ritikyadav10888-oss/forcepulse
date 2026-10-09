@@ -21,6 +21,7 @@ import { AuditService } from "../common/audit.service";
 import { EventBus } from "../common/event-bus";
 import type { AuthContext } from "../common/policy";
 import { DB } from "../common/tokens";
+import { RealtimeGateway } from "../realtime.gateway";
 import { TournamentsService } from "../tournaments/tournaments.service";
 import { planFormat, schedule, standings, type Busy, type ScheduleOptions, type Side } from "./plan";
 
@@ -43,6 +44,7 @@ export class FixturesService {
     private readonly tournaments: TournamentsService,
     private readonly audit: AuditService,
     private readonly events: EventBus,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   // ---------- Format and generation ----------
@@ -178,7 +180,9 @@ export class FixturesService {
       .returning();
     if (patch.scorerUserId) await this.events.publish({ type: "ScorerAssigned", matchId, scorerUserId: patch.scorerUserId });
     const names = await this.names([row.homeEntrantId, row.awayEntrantId]);
-    return { match: this.view(row, names), warnings: await this.clashes(row) };
+    const match = this.view(row, names);
+    this.realtime.emit(`tournament:${row.tournamentId}`, "match.updated", match);
+    return { match, warnings: await this.clashes(row) };
   }
 
   async cancel(auth: AuthContext, matchId: string, reason: string) {
@@ -187,7 +191,7 @@ export class FixturesService {
     if (m.status !== "scheduled") throw new ApiError("CONFLICT", "Only a match that hasn't started can be cancelled.");
     const [row] = await this.db.update(matches).set({ status: "cancelled", resultNote: reason }).where(eq(matches.id, matchId)).returning();
     await this.audit.record({ entity: "match", entityId: matchId, action: "cancel", reason, userId: auth.userId });
-    return this.view(row, await this.names([row.homeEntrantId, row.awayEntrantId]));
+    return this.announce(row, false);
   }
 
   /**
@@ -232,7 +236,16 @@ export class FixturesService {
       if (updated.stage === "group") await this.fillFromGroups(tx, updated.formatId);
       return updated;
     });
-    return this.view(row, await this.names([row.homeEntrantId, row.awayEntrantId]));
+    return this.announce(row, true);
+  }
+
+  /** Tells the tournament page what changed: the match, and the tables after a result (FR-TRN-11). */
+  private async announce(row: MatchRow, standingsChanged: boolean) {
+    const match = this.view(row, await this.names([row.homeEntrantId, row.awayEntrantId]));
+    const room = `tournament:${row.tournamentId}`;
+    this.realtime.emit(room, "match.updated", match);
+    if (standingsChanged) this.realtime.emit(room, "standings.updated", await this.standings(row.tournamentId).catch(() => []));
+    return match;
   }
 
   // ---------- Bracket filling ----------

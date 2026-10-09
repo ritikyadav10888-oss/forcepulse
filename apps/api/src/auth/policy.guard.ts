@@ -20,6 +20,7 @@ export class PolicyGuard implements CanActivate {
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
+    if (ctx.getType() !== "http") return true; // WebSocket rooms check access themselves (realtime.gateway.ts)
     const policy = this.reflector.getAllAndOverride<Policy | undefined>(POLICY_KEY, [ctx.getHandler(), ctx.getClass()]);
     if (!policy) throw new ApiError("POLICY_MISSING", "This route has no access policy.");
 

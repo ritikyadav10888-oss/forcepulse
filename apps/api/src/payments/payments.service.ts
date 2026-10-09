@@ -18,6 +18,7 @@ import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
 import type { AuthContext } from "../common/policy";
 import { CLOCK, DB, PAYMENT_GATEWAY, type Clock } from "../common/tokens";
+import { RealtimeGateway } from "../realtime.gateway";
 import { RegistrationsService } from "../registrations/registrations.service";
 import type { GatewayPayment, PaymentGateway } from "./gateway";
 import { postTransaction } from "./ledger";
@@ -36,6 +37,7 @@ export class PaymentsService {
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
     private readonly audit: AuditService,
     private readonly registrations: RegistrationsService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   /**
@@ -158,6 +160,10 @@ export class PaymentsService {
       await this.audit.record({ entity: "payment", entityId: p.id, action: "captured", after: { razorpayPaymentId: gp.id, amount: gp.amount, fee: gatewayFee }, userId: null }, tx);
       return "captured" as const;
     });
+    if (outcome === "captured") {
+      const [p] = await this.db.select().from(payments).where(eq(payments.razorpayOrderId, gp.order_id));
+      this.realtime.emit(`user:${p.payerUserId}`, "payment.updated", this.view(p));
+    }
     return outcome;
   }
 

@@ -19,6 +19,7 @@ export class ErrorFilter implements ExceptionFilter {
   private readonly log = new Logger("Error");
 
   catch(err: unknown, host: ArgumentsHost) {
+    if (host.getType() !== "http") return void this.log.error(err instanceof Error ? err.stack : String(err));
     const res = host.switchToHttp().getResponse<Response>();
     let status = 500;
     let body: ApiErrorBody = { code: "INTERNAL", message: "Something went wrong. Please try again." };

@@ -8,6 +8,7 @@ import { EventBus } from "../common/event-bus";
 import type { AuthContext } from "../common/policy";
 import { CLOCK, DB, type Clock } from "../common/tokens";
 import { FixturesService } from "../fixtures/fixtures.service";
+import { RealtimeGateway } from "../realtime.gateway";
 
 type MatchRow = typeof matches.$inferSelect;
 
@@ -30,6 +31,7 @@ export class ScoringService {
     private readonly fixtures: FixturesService,
     private readonly audit: AuditService,
     private readonly events: EventBus,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   // ---------- Rule sets (FR-SCR-01 to 03) ----------
@@ -91,7 +93,7 @@ export class ScoringService {
       return started;
     });
     await this.events.publish({ type: "MatchStartedBy", matchId, userId: auth.userId });
-    return this.live(row.id);
+    return this.publish(row.id);
   }
 
   /**
@@ -132,7 +134,7 @@ export class ScoringService {
         lastSeq = e.seq;
       }
     });
-    return this.live(matchId);
+    return this.publish(matchId);
   }
 
   /** Every event of a match, for a device that needs to catch up. */
@@ -188,7 +190,14 @@ export class ScoringService {
     const winner = w === "home" ? m.homeEntrantId : w === "away" ? m.awayEntrantId : (input.winnerEntrantId ?? null);
     await this.fixtures.recordResult(auth, m.id, { type: "score", homeScore: state.scores.home, awayScore: state.scores.away, winnerEntrantId: winner });
     await this.db.update(matches).set({ playerOfMatchId: input.playerOfMatchId ?? null, scorerDeviceId: null, scorerLeaseUntil: null }).where(eq(matches.id, m.id));
-    return this.live(m.id);
+    return this.publish(m.id);
+  }
+
+  /** Live state to everyone watching the match (FR-SCR-13), and back to the caller. */
+  private async publish(matchId: string) {
+    const state = await this.live(matchId);
+    this.realtime.emit(`match:${matchId}`, "score.updated", state);
+    return state;
   }
 
   // ---------- Helpers ----------
