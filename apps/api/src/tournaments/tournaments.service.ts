@@ -20,6 +20,7 @@ import { randomCode, slugify } from "../common/codes";
 import { EventBus } from "../common/event-bus";
 import type { AuthContext } from "../common/policy";
 import { CLOCK, DB, type Clock } from "../common/tokens";
+import { PayoutAccountsService } from "../payments/payout-accounts.service";
 import type { CreateTournamentInput, EventInput, InviteLinkInput, ListQuery, UpdateTournamentInput } from "./tournament.schemas";
 
 type TournamentRow = typeof tournaments.$inferSelect;
@@ -52,6 +53,7 @@ const NEXT_STATUS: Record<TournamentStatus, TournamentStatus[]> = {
 };
 
 const isStaff = (auth?: AuthContext) => !!auth?.roles.includes("super_admin");
+const hasFees = (events: EventInputT[]) => events.some((e) => e.feePaise > 0 || e.categories.some((c) => (c.feePaise ?? 0) > 0));
 
 @Injectable()
 export class TournamentsService {
@@ -60,6 +62,7 @@ export class TournamentsService {
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly audit: AuditService,
     private readonly events: EventBus,
+    private readonly payoutAccounts: PayoutAccountsService,
   ) {}
 
   // ---------- Create and edit ----------
@@ -68,6 +71,7 @@ export class TournamentsService {
   async create(auth: AuthContext, input: CreateTournamentInput): Promise<TournamentView> {
     this.checkDates(input.startsAt, input.endsAt, input.registrationDeadline);
     const eventRows = await this.checkEvents(input.events);
+    if (input.status === "enrollment_open" && hasFees(eventRows)) await this.payoutAccounts.assertReady(this.db, auth.userId);
     const { events: _events, ...details } = input;
 
     const id = await this.db.transaction(async (tx) => {
@@ -125,8 +129,9 @@ export class TournamentsService {
 
   /** Replaces sports and categories. Only before anyone has registered: entries point at them. */
   async replaceEvents(auth: AuthContext, id: string, events: EventInputT[]): Promise<TournamentView> {
-    await this.manageable(auth, id);
+    const t = await this.manageable(auth, id);
     const eventRows = await this.checkEvents(events);
+    if (t.status === "enrollment_open" && hasFees(eventRows)) await this.payoutAccounts.assertReady(this.db, t.organiserUserId);
     await this.db.transaction(async (tx) => {
       const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(enrollments).where(eq(enrollments.tournamentId, id));
       if (n > 0) throw new ApiError("CONFLICT", "Players have registered, so sports and categories can't be replaced any more.");
@@ -145,6 +150,7 @@ export class TournamentsService {
     if (status === "enrollment_open" && t.formVersion === 0 && t.formDraft.length > 0) {
       throw new ApiError("CONFLICT", "Publish the registration form before opening registration.");
     }
+    if (status === "enrollment_open" && (await this.view(t)).isPaid) await this.payoutAccounts.assertReady(this.db, t.organiserUserId);
     await this.db.transaction(async (tx) => {
       await tx.update(tournaments).set({ status }).where(eq(tournaments.id, id));
       await this.audit.record({ entity: "tournament", entityId: id, action: "set_status", before: { status: t.status }, after: { status }, userId: auth.userId }, tx);

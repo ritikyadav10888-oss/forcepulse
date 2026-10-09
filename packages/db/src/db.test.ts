@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { auditLogs, enrollments, ensureSuperAdmin, migrateDb, openDb, parsePincodeCsv, players, seedReferenceData, settings, sports, tournamentEvents, tournaments, userRoles, users, type DbHandle } from "./index";
+import { auditLogs, enrollments, ensureSuperAdmin, ledgerEntries, migrateDb, openDb, parsePincodeCsv, players, seedReferenceData, settings, sports, tournamentEvents, tournaments, userRoles, users, type DbHandle } from "./index";
 
 let handle: DbHandle;
 
@@ -79,5 +79,35 @@ describe("one live entry per player per sport (SRS gap 6)", () => {
     await expect(db.insert(enrollments).values({ ...entry, registrationNo: "R2", status: "enrolled" })).rejects.toThrow();
     await db.update(enrollments).set({ status: "expired" }).where(eq(enrollments.registrationNo, "R1"));
     await db.insert(enrollments).values({ ...entry, registrationNo: "R3", status: "payment_pending" });
+  });
+});
+
+describe("ledger guards (System Design 5, NFR-11)", () => {
+  it("accepts a balanced transaction and refuses an unbalanced one, an edit, or a two-sided line", async () => {
+    const db = handle.db;
+    const txn = "11111111-1111-4111-8111-111111111111";
+    await db.transaction(async (tx) => {
+      await tx.insert(ledgerEntries).values([
+        { transactionId: txn, account: "razorpay_clearing", debitPaise: 100 },
+        { transactionId: txn, account: "platform_fee_revenue", creditPaise: 100 },
+      ]);
+    });
+
+    const bad = "22222222-2222-4222-8222-222222222222";
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.insert(ledgerEntries).values([
+          { transactionId: bad, account: "razorpay_clearing", debitPaise: 100 },
+          { transactionId: bad, account: "platform_fee_revenue", creditPaise: 99 },
+        ]);
+      }),
+    ).rejects.toThrow();
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(ledgerEntries).where(eq(ledgerEntries.transactionId, bad));
+    expect(n).toBe(0);
+
+    await expect(db.update(ledgerEntries).set({ memo: "x" }).where(eq(ledgerEntries.transactionId, txn))).rejects.toThrow();
+    await expect(
+      db.insert(ledgerEntries).values({ transactionId: "33333333-3333-4333-8333-333333333333", account: "razorpay_clearing", debitPaise: 5, creditPaise: 5 }),
+    ).rejects.toThrow();
   });
 });

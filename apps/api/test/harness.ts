@@ -3,6 +3,7 @@ import request from "supertest";
 import { ensureSuperAdmin, migrateDb, openDb, seedReferenceData, type DbHandle } from "@force-pulse/db";
 import type { OtpSender } from "../src/auth/otp-sender";
 import { MemoryFileStore } from "../src/uploads/file-store";
+import { FakeGateway } from "./fake-gateway";
 import type { Clock } from "../src/common/tokens";
 import { loadConfig } from "../src/config";
 import { createApp } from "../src/create-app";
@@ -15,6 +16,12 @@ export class TestClock implements Clock {
   }
   advance(seconds: number) {
     this.t += seconds * 1000;
+  }
+  /** Jump forward to a moment (never back). */
+  set(iso: string) {
+    const t = Date.parse(iso);
+    if (t < this.t) throw new Error("TestClock only moves forward");
+    this.t = t;
   }
 }
 
@@ -34,6 +41,7 @@ export interface Harness {
   db: DbHandle;
   clock: TestClock;
   otp: CapturingOtpSender;
+  gateway: FakeGateway;
   http: () => ReturnType<typeof request>;
   close(): Promise<void>;
 }
@@ -50,14 +58,17 @@ export async function startHarness(): Promise<Harness> {
     NODE_ENV: "test",
     JWT_SECRET: "test-jwt-secret-0123456789-0123456789",
     OTP_SECRET: "test-otp-secret-0123456789-0123456789",
+    PAYOUT_ENCRYPTION_KEY: "11".repeat(32),
   });
-  const app = await createApp({ config, db, clock, otpSender: otp, fileStore: new MemoryFileStore() });
+  const gateway = new FakeGateway();
+  const app = await createApp({ config, db, clock, otpSender: otp, fileStore: new MemoryFileStore(), gateway });
   await app.init();
   return {
     app,
     db,
     clock,
     otp,
+    gateway,
     http: () => request(app.getHttpServer()),
     async close() {
       await app.close();
@@ -87,3 +98,10 @@ export async function staffSignIn(h: Harness) {
 }
 
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+/** Organiser adds bank details and staff verify them, so paid registration can open (FR-PAY-11). */
+export async function readyForPaid(h: Harness, organiser: { accessToken: string; user: { id: string } }) {
+  await h.http().put("/api/v1/payout-accounts/me").set(bearer(organiser.accessToken)).send({ holderName: "Org Name", accountNumber: "123456789012", ifsc: "HDFC0001234" }).expect(200);
+  const admin = await staffSignIn(h);
+  await h.http().post(`/api/v1/admin/payout-accounts/${organiser.user.id}/verify`).set(bearer(admin.accessToken)).expect(200);
+}

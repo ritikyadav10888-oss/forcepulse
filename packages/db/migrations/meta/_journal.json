@@ -22,6 +22,20 @@
       "when": 1791553268349,
       "tag": "0002_tournaments_registration",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791555162012,
+      "tag": "0003_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791555166019,
+      "tag": "0004_ledger_guards",
+      "breakpoints": true
     }
   ]
 }

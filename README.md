@@ -49,10 +49,11 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 - **Errors are `{ code, message }`**, with codes from `packages/shared/src/errors.ts`.
 - **Money is integer paise.** Never floats. Fields carrying money end in `Paise`.
 - **Inside a transaction, use `tx` only.** Calling `this.db` there deadlocks on PGlite and escapes the transaction on PostgreSQL.
-- **The audit log is append-only.** The database refuses updates and deletes.
+- **The audit log and the money ledger are append-only.** The database refuses updates and deletes, and refuses any ledger transaction whose debits and credits differ.
+- **Only Razorpay test keys outside production.** The API refuses to start with `rzp_live_` keys unless `NODE_ENV=production`.
 - **Roles are granted by events** (`TournamentCreated` → organiser, `ScorerAssigned` / `MatchStartedBy` → scorer), never by a form.
 
-## API so far (weeks 1–2)
+## API so far (weeks 1–3)
 
 | Area | Endpoints |
 | --- | --- |
@@ -66,3 +67,20 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Registration | `POST /tournaments/:id/registrations`, `POST /tournaments/:id/events/:eventId/teams`, `GET /teams/code/:code`, `POST /teams/join`, `GET /me/enrollments`, `GET/POST /me/managed-players` |
 | Organiser | `GET /tournaments/:id/enrollments`, `GET /tournaments/:id/enrollments.csv`, `POST /enrollments/:id/remove`, `POST /enrollments/:id/review`, `PATCH /enrollments/:id/flag` |
 | Files and pincodes | `POST /uploads` (multipart: `file`, `kind`), `GET /uploads/:key`, `GET /pincodes/:pincode` |
+| Payments | `POST /payments/orders`, `POST /payments/webhook` (Razorpay, signature-checked), `POST /payments/confirm`, `GET /me/payments`, `GET /payments/:id`, `GET /payments/:id/receipt` |
+| Organiser money | `GET/PUT /payout-accounts/me`, `GET /tournaments/:id/finance`, `GET /tournaments/:id/statement.csv` |
+| Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts`, `POST /admin/payouts/run`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
+
+## Payments: how money moves
+
+On a ₹1,000 entry fee paid by card (SRS v2 4.1):
+
+| | Amount | Ledger |
+| --- | --- | --- |
+| Player pays | ₹1,023.60 | Debit Razorpay clearing |
+| Organiser share (97%) | ₹970.00 | Credit organiser payable (per tournament) |
+| Platform fee (3%) | ₹30.00 | Credit platform fee revenue |
+| Convenience fee (paid by player) | ₹23.60 | Credit convenience fee revenue |
+| Razorpay charge | ₹23.60 | Debit gateway fee expense, credit Razorpay clearing |
+
+A payment counts only when Razorpay's signed webhook says so, or when the server fetches it from Razorpay after Checkout. Payouts are scheduled at registration close + 2 days (India date) and are the organiser-payable balance on that day. Until Route or RazorpayX is chosen, staff send the transfer and record the bank reference.

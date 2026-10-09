@@ -12,13 +12,18 @@ import { TokensService } from "./auth/tokens.service";
 import { AuditService } from "./common/audit.service";
 import { ErrorFilter } from "./common/error.filter";
 import { EventBus } from "./common/event-bus";
-import { CLOCK, CONFIG, DB, FILE_STORE, OTP_SENDER, systemClock, type Clock } from "./common/tokens";
+import { CLOCK, CONFIG, DB, FILE_STORE, OTP_SENDER, PAYMENT_GATEWAY, systemClock, type Clock } from "./common/tokens";
 import type { AppConfig } from "./config";
 import { HealthController } from "./health.controller";
 import { MeController } from "./me/me.controller";
 import { PlayersController } from "./players/players.controller";
 import { PlayersService } from "./players/players.service";
 import { RolesService } from "./roles/roles.service";
+import { RazorpayGateway, UnconfiguredGateway, type PaymentGateway } from "./payments/gateway";
+import { PaymentsController } from "./payments/payments.controller";
+import { PaymentsService } from "./payments/payments.service";
+import { PayoutAccountsService } from "./payments/payout-accounts.service";
+import { PayoutsService } from "./payments/payouts.service";
 import { PincodesController } from "./pincodes.controller";
 import { RegistrationsController } from "./registrations/registrations.controller";
 import { RegistrationsService } from "./registrations/registrations.service";
@@ -35,6 +40,7 @@ export interface AppDeps {
   clock?: Clock;
   otpSender?: OtpSender;
   fileStore?: FileStore;
+  gateway?: PaymentGateway;
 }
 
 /** One module for now. It splits into Core / Scoring / Auction / Payments modules as those arrive. */
@@ -55,6 +61,7 @@ export class AppModule {
         RegistrationsController,
         UploadsController,
         PincodesController,
+        PaymentsController,
       ],
       providers: [
         { provide: CONFIG, useValue: deps.config },
@@ -62,6 +69,7 @@ export class AppModule {
         { provide: CLOCK, useValue: deps.clock ?? systemClock },
         { provide: OTP_SENDER, useValue: deps.otpSender ?? new ConsoleOtpSender() },
         { provide: FILE_STORE, useValue: deps.fileStore ?? new LocalFileStore(deps.config.uploadDir) },
+        { provide: PAYMENT_GATEWAY, useValue: deps.gateway ?? gatewayFor(deps.config) },
         { provide: APP_GUARD, useClass: PolicyGuard },
         { provide: APP_FILTER, useClass: ErrorFilter },
         AuditService,
@@ -74,7 +82,15 @@ export class AppModule {
         TournamentsService,
         RegistrationsService,
         UploadsService,
+        PaymentsService,
+        PayoutsService,
+        PayoutAccountsService,
       ],
     };
   }
+}
+
+function gatewayFor(config: AppConfig): PaymentGateway {
+  const rp = config.razorpay;
+  return rp ? new RazorpayGateway(rp.keyId, rp.keySecret, rp.webhookSecret) : new UnconfiguredGateway();
 }

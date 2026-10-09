@@ -333,7 +333,7 @@ export class RegistrationsService {
   }
 
   /** A team follows its captain's entry: confirmed once the captain is in, cancelled (with its members) if the captain is out. */
-  private async syncTeam(tx: Db, teamId: string) {
+  async syncTeam(tx: Db, teamId: string) {
     const [captain] = await tx.select().from(enrollments).where(and(eq(enrollments.teamId, teamId), eq(enrollments.isCaptain, true))).orderBy(desc(enrollments.createdAt)).limit(1);
     if (!captain) return;
     const status = captain.status === "enrolled" ? "confirmed" : ["removed", "rejected", "expired"].includes(captain.status) ? "cancelled" : "pending";

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pincodes } from "@force-pulse/db";
 import { suggestedFields } from "@force-pulse/shared";
 import { EventBus, type DomainEvent } from "../src/common/event-bus";
-import { bearer, signIn, startHarness, type Harness } from "./harness";
+import { bearer, readyForPaid, signIn, startHarness, type Harness } from "./harness";
 
 let h: Harness;
 const published: DomainEvent[] = [];
@@ -200,6 +200,7 @@ describe("Review add-on (FR-REG-12, AC-05)", () => {
 describe("paid entries hold a place for 30 minutes (FR-PAY-07, AC-03)", () => {
   it("holds, then releases the place and lets the player try again", async () => {
     const org = await person();
+    await readyForPaid(h, org);
     const t = await tournament(org, [badminton({ maxTeams: 2, feePaise: 100_000 })]);
     expect((await api(null).get(`/tournaments/${t.id}`)).body.isPaid).toBe(true);
     const [a, b, c] = [await person(), await person(), await person()];
@@ -241,6 +242,7 @@ describe("teams and team codes (FR-REG-07)", () => {
 
   it("a paid team waits for the captain's payment before anyone can join; the captain pays once (FR-PAY-02)", async () => {
     const org = await person();
+    await readyForPaid(h, org);
     const t = await tournament(org, [football({ feePaise: 500_000 })]);
     const res = await api(await person()).post(`/tournaments/${t.id}/events/${t.events[0].id}/teams`, { teamName: "Paid XI" }).expect(201);
     expect(res.body).toMatchObject({ amountDuePaise: 500_000, team: { status: "pending" } });
