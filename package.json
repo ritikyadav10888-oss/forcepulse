@@ -4,12 +4,13 @@
   "description": "Force Pulse backend: API, database and shared code",
   "workspaces": [
     "packages/shared",
+    "packages/scoring",
     "packages/db",
     "apps/api"
   ],
   "scripts": {
-    "build": "tsc -b packages/shared packages/db apps/api",
-    "typecheck": "tsc -b packages/shared packages/db apps/api",
+    "build": "tsc -b packages/shared packages/scoring packages/db apps/api",
+    "typecheck": "tsc -b packages/shared packages/scoring packages/db apps/api",
     "test": "npm run test --workspaces --if-present",
     "dev": "npm run dev -w @force-pulse/api",
     "db:generate": "npm run generate -w @force-pulse/db",

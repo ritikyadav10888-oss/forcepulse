@@ -1,0 +1,12 @@
+{
+  "name": "@force-pulse/scoring",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scoring engines for every sport: pure (state, events, rules) functions shared by the API and the web app",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  }
+}
