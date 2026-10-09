@@ -53,7 +53,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 - **Only Razorpay test keys outside production.** The API refuses to start with `rzp_live_` keys unless `NODE_ENV=production`.
 - **Roles are granted by events** (`TournamentCreated` → organiser, `ScorerAssigned` / `MatchStartedBy` → scorer), never by a form.
 
-## API so far (weeks 1–3)
+## API so far
 
 | Area | Endpoints |
 | --- | --- |
@@ -70,6 +70,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Payments | `POST /payments/orders`, `POST /payments/webhook` (Razorpay, signature-checked), `POST /payments/confirm`, `GET /me/payments`, `GET /payments/:id`, `GET /payments/:id/receipt` |
 | Organiser money | `GET/PUT /payout-accounts/me`, `GET /tournaments/:id/finance`, `GET /tournaments/:id/statement.csv` |
 | Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts/due` (organisers waiting to be paid), `GET /admin/payouts`, `POST /admin/tournaments/:id/payouts`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
+| Fixtures and results | `PUT /events/:eventId/format`, `POST /formats/:id/fixtures`, `GET /tournaments/:id/matches`, `GET /tournaments/:id/standings`, `PATCH /matches/:id`, `POST /matches/:id/cancel`, `POST /matches/:id/result` |
 
 ## Payments: how money moves
 

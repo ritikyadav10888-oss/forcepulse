@@ -36,6 +36,13 @@
       "when": 1791555166019,
       "tag": "0004_ledger_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791575486947,
+      "tag": "0005_fixtures",
+      "breakpoints": true
     }
   ]
 }

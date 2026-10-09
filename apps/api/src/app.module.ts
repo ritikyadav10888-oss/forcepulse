@@ -14,6 +14,8 @@ import { ErrorFilter } from "./common/error.filter";
 import { EventBus } from "./common/event-bus";
 import { CLOCK, CONFIG, DB, FILE_STORE, OTP_SENDER, PAYMENT_GATEWAY, systemClock, type Clock } from "./common/tokens";
 import type { AppConfig } from "./config";
+import { FixturesController } from "./fixtures/fixtures.controller";
+import { FixturesService } from "./fixtures/fixtures.service";
 import { HealthController } from "./health.controller";
 import { MeController } from "./me/me.controller";
 import { PlayersController } from "./players/players.controller";
@@ -62,6 +64,7 @@ export class AppModule {
         UploadsController,
         PincodesController,
         PaymentsController,
+        FixturesController,
       ],
       providers: [
         { provide: CONFIG, useValue: deps.config },
@@ -85,6 +88,7 @@ export class AppModule {
         PaymentsService,
         PayoutsService,
         PayoutAccountsService,
+        FixturesService,
       ],
     };
   }

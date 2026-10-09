@@ -226,3 +226,72 @@ export const enrollments = competition.table(
     index("enrollments_team").on(t.teamId),
   ],
 );
+
+export type FormatType = "league" | "knockout" | "league_knockout";
+export type TieBreaker = "points" | "score_diff" | "scored" | "wins" | "head_to_head";
+
+/** How one sport (or one category of it) is played (FR-TRN-04 to 07). */
+export interface FormatConfig {
+  /** League: groups and round robin. */
+  groups: number;
+  /** 1 = single round robin, 2 = double. */
+  legs: 1 | 2;
+  points: { win: number; draw: number; loss: number };
+  tieBreakers: TieBreaker[];
+  /** League + knockout: how many from each group go through. */
+  qualifiersPerGroup: number;
+  thirdPlace: boolean;
+  /** random, or manual using `seeds` (entrant ids, best first). */
+  seeding: "random" | "manual";
+  seeds: string[];
+}
+
+export const formats = competition.table(
+  "formats",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tournamentId: uuid("tournament_id").notNull().references(() => tournaments.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").notNull().references(() => tournamentEvents.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "cascade" }),
+    type: text("type").$type<FormatType>().notNull(),
+    config: jsonb("config").$type<FormatConfig>().notNull(),
+  },
+  (t) => [uniqueIndex("formats_event_category").on(t.eventId, sql`coalesce(${t.categoryId}, '00000000-0000-0000-0000-000000000000'::uuid)`)],
+);
+
+export type MatchStatus = "scheduled" | "live" | "completed" | "walkover" | "forfeit" | "abandoned" | "cancelled";
+
+/**
+ * A fixture (FR-TRN-08 to 12). Entrants are teams for team sports and entries (enrollments) for individual ones.
+ * Knockout matches name where their entrants come from: the winner of a match, or a group place ("A1").
+ */
+export const matches = competition.table(
+  "matches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tournamentId: uuid("tournament_id").notNull().references(() => tournaments.id, { onDelete: "cascade" }),
+    formatId: uuid("format_id").notNull().references(() => formats.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<"group" | "knockout">().notNull(),
+    /** "A", "B" … for group matches. */
+    groupName: text("group_name"),
+    round: integer("round").notNull(),
+    /** Order within the stage, 1-based; for knockout it is the bracket position in the round. */
+    matchNo: integer("match_no").notNull(),
+    homeEntrantId: uuid("home_entrant_id"),
+    awayEntrantId: uuid("away_entrant_id"),
+    /** Knockout placeholders until filled: "A1", "W:<matchNo>" (winner), "L:<matchNo>" (loser, third place). */
+    homeSource: text("home_source"),
+    awaySource: text("away_source"),
+    court: text("court"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    scorerUserId: uuid("scorer_user_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").$type<MatchStatus>().notNull().default("scheduled"),
+    homeScore: integer("home_score"),
+    awayScore: integer("away_score"),
+    winnerEntrantId: uuid("winner_entrant_id"),
+    resultNote: text("result_note"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("matches_tournament").on(t.tournamentId, t.scheduledAt), index("matches_format").on(t.formatId, t.stage, t.round)],
+);
