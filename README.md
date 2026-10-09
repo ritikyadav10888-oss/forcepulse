@@ -28,7 +28,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | All tests (shared, database, API) |
+| `npm test` | All tests (shared, scoring, database, API). With `REDIS_URL=redis://127.0.0.1:6379` also the multi-server test |
 | `npm run build` | Type-check and compile everything |
 | `npm run db:generate` | Write a new SQL migration after a schema change (review it before committing) |
 | `npm run db:migrate` | Apply migrations to `DATABASE_URL` |

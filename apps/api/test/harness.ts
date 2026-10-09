@@ -43,10 +43,12 @@ export interface Harness {
   otp: CapturingOtpSender;
   gateway: FakeGateway;
   http: () => ReturnType<typeof request>;
+  /** Another API server on the same database, as in a multi-server deployment. */
+  extraApp(): Promise<INestApplication>;
   close(): Promise<void>;
 }
 
-export async function startHarness(): Promise<Harness> {
+export async function startHarness(opts: { redisUrl?: string } = {}): Promise<Harness> {
   const db = await openDb("pglite:memory");
   await migrateDb(db);
   await seedReferenceData(db.db);
@@ -59,9 +61,12 @@ export async function startHarness(): Promise<Harness> {
     JWT_SECRET: "test-jwt-secret-0123456789-0123456789",
     OTP_SECRET: "test-otp-secret-0123456789-0123456789",
     PAYOUT_ENCRYPTION_KEY: "11".repeat(32),
+    REDIS_URL: opts.redisUrl,
   });
   const gateway = new FakeGateway();
-  const app = await createApp({ config, db, clock, otpSender: otp, fileStore: new MemoryFileStore(), gateway });
+  const fileStore = new MemoryFileStore();
+  const extra: INestApplication[] = [];
+  const app = await createApp({ config, db, clock, otpSender: otp, fileStore, gateway });
   await app.init();
   return {
     app,
@@ -70,7 +75,14 @@ export async function startHarness(): Promise<Harness> {
     otp,
     gateway,
     http: () => request(app.getHttpServer()),
+    async extraApp() {
+      const more = await createApp({ config, db, clock, otpSender: otp, fileStore, gateway });
+      await more.init();
+      extra.push(more);
+      return more;
+    },
     async close() {
+      for (const more of extra) await more.close();
       await app.close();
       await db.close();
     },

@@ -14,6 +14,8 @@ const schema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  /** Set when the API runs on more than one server: live updates are relayed through Redis. */
+  REDIS_URL: z.string().regex(/^rediss?:\/\//, "REDIS_URL must start with redis:// or rediss://").optional(),
   /** 64 hex characters (32 bytes): encrypts organiser bank account numbers. */
   PAYOUT_ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/i, "PAYOUT_ENCRYPTION_KEY must be 64 hex characters").optional(),
 });
@@ -31,6 +33,7 @@ export interface AppConfig {
   /** Null when Razorpay isn't configured: payment endpoints then answer PAYMENTS_UNAVAILABLE. */
   razorpay: { keyId: string; keySecret: string; webhookSecret: string } | null;
   payoutEncryptionKey: string | null;
+  redisUrl: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -62,5 +65,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     uploadDir: c.UPLOAD_DIR,
     razorpay: c.RAZORPAY_KEY_ID ? { keyId: c.RAZORPAY_KEY_ID, keySecret: c.RAZORPAY_KEY_SECRET!, webhookSecret: c.RAZORPAY_WEBHOOK_SECRET! } : null,
     payoutEncryptionKey: c.PAYOUT_ENCRYPTION_KEY ?? null,
+    redisUrl: c.REDIS_URL ?? null,
   };
 }
