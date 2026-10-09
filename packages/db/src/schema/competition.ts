@@ -295,3 +295,19 @@ export const matches = competition.table(
   },
   (t) => [index("matches_tournament").on(t.tournamentId, t.scheduledAt), index("matches_format").on(t.formatId, t.stage, t.round)],
 );
+
+/** Tournament gallery (FR-MED-01/02): up to 50 photos and videos, added by the organiser. */
+export const mediaItems = competition.table(
+  "media_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tournamentId: uuid("tournament_id").notNull().references(() => tournaments.id, { onDelete: "cascade" }),
+    uploadKey: text("upload_key").notNull().unique(),
+    type: text("type").$type<"photo" | "video">().notNull(),
+    caption: text("caption").notNull().default(""),
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("media_items_tournament").on(t.tournamentId, t.createdAt)],
+);

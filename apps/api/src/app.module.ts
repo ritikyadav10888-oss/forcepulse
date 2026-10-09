@@ -16,6 +16,7 @@ import { CLOCK, CONFIG, DB, FILE_STORE, OTP_SENDER, PAYMENT_GATEWAY, systemClock
 import type { AppConfig } from "./config";
 import { FixturesController } from "./fixtures/fixtures.controller";
 import { FixturesService } from "./fixtures/fixtures.service";
+import { GalleryController } from "./gallery.controller";
 import { HealthController } from "./health.controller";
 import { MeController } from "./me/me.controller";
 import { PlayersController } from "./players/players.controller";
@@ -65,6 +66,7 @@ export class AppModule {
         PincodesController,
         PaymentsController,
         FixturesController,
+        GalleryController,
       ],
       providers: [
         { provide: CONFIG, useValue: deps.config },

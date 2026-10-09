@@ -43,6 +43,13 @@
       "when": 1791575486947,
       "tag": "0005_fixtures",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791575938442,
+      "tag": "0006_gallery",
+      "breakpoints": true
     }
   ]
 }

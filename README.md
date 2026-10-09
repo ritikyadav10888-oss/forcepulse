@@ -71,6 +71,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Organiser money | `GET/PUT /payout-accounts/me`, `GET /tournaments/:id/finance`, `GET /tournaments/:id/statement.csv` |
 | Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts/due` (organisers waiting to be paid), `GET /admin/payouts`, `POST /admin/tournaments/:id/payouts`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
 | Fixtures and results | `PUT /events/:eventId/format`, `POST /formats/:id/fixtures`, `GET /tournaments/:id/matches`, `GET /tournaments/:id/standings`, `PATCH /matches/:id`, `POST /matches/:id/cancel`, `POST /matches/:id/result` |
+| Gallery | `GET /tournaments/:id/media` (public), `POST /tournaments/:id/media`, `PATCH /media/:id`, `DELETE /media/:id` (organiser; files from `POST /uploads` with `kind=media`) |
 
 ## Payments: how money moves
 

@@ -24,8 +24,8 @@ export const auditLogs = platform.table(
 export const uploads = platform.table("uploads", {
   key: text("key").primaryKey(), // "upl_…"
   ownerUserId: uuid("owner_user_id").references(() => users.id, { onDelete: "set null" }),
-  /** photo: shown publicly · proof / file: owner, staff and the organiser of a tournament it was submitted to. */
-  kind: text("kind").$type<"photo" | "proof" | "file">().notNull(),
+  /** photo, media: shown publicly · proof / file: owner, staff and the organiser of a tournament it was submitted to. */
+  kind: text("kind").$type<"photo" | "proof" | "file" | "media">().notNull(),
   mime: text("mime").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
