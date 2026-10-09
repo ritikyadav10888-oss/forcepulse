@@ -69,7 +69,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Files and pincodes | `POST /uploads` (multipart: `file`, `kind`), `GET /uploads/:key`, `GET /pincodes/:pincode` |
 | Payments | `POST /payments/orders`, `POST /payments/webhook` (Razorpay, signature-checked), `POST /payments/confirm`, `GET /me/payments`, `GET /payments/:id`, `GET /payments/:id/receipt` |
 | Organiser money | `GET/PUT /payout-accounts/me`, `GET /tournaments/:id/finance`, `GET /tournaments/:id/statement.csv` |
-| Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts`, `POST /admin/tournaments/:id/payouts`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
+| Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts/due` (organisers waiting to be paid), `GET /admin/payouts`, `POST /admin/tournaments/:id/payouts`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
 
 ## Payments: how money moves
 

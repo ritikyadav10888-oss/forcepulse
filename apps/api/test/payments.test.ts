@@ -212,7 +212,13 @@ describe("late payment and organiser payout by hand (FR-PAY-10, decision 10 Oct 
     expect((await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(409)).body.message).toMatch(/after the tournament is completed/);
     await as(org).post(`/admin/tournaments/${t.id}/payouts`).expect(403);
 
+    expect((await as(admin).get("/admin/payouts/due").expect(200)).body).toEqual([]);
     for (const status of ["fixtures_published", "live", "completed"]) await as(org).put(`/tournaments/${t.id}/status`, { status }).expect(200);
+
+    // The admin dashboard now flags this organiser as waiting to be paid.
+    const due = await as(admin).get("/admin/payouts/due").expect(200);
+    expect(due.body).toEqual([expect.objectContaining({ tournamentId: t.id, organiserUserId: org.user.id, owedPaise: 3 * 97_000, bankVerified: true, accountLast4: "9012" })]);
+    await as(org).get("/admin/payouts/due").expect(403);
 
     // A failed transfer puts the money back; the next payout takes it again.
     const first = await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(201);
@@ -225,6 +231,7 @@ describe("late payment and organiser payout by hand (FR-PAY-10, decision 10 Oct 
     const fin = await as(org).get(`/tournaments/${t.id}/finance`).expect(200);
     expect(fin.body).toMatchObject({ organiserSharePaise: 3 * 97_000, paidOutPaise: 3 * 97_000, netPayablePaise: 0 });
     expect((await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(409)).body.message).toMatch(/Nothing is owed/);
+    expect((await as(admin).get("/admin/payouts/due")).body).toEqual([]);
 
     const money = await as(admin).get("/admin/finance").expect(200);
     expect(money.body.netRevenuePaise).toBe(money.body.platformFeePaise + money.body.convenienceFeePaise - money.body.gatewayFeePaise);

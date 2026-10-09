@@ -122,6 +122,13 @@ export class PaymentsController {
     return this.accounts.setVerified(auth.userId, userId);
   }
 
+  /** Organisers waiting to be paid: completed tournaments with money still owed (dashboard alert). */
+  @Get("admin/payouts/due")
+  @RequireRole("admin")
+  payoutsDue() {
+    return this.payouts.due();
+  }
+
   @Get("admin/payouts")
   @RequireRole("admin")
   adminPayouts(@Query() q: unknown) {

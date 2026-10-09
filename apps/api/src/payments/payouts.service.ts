@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { desc, eq, inArray } from "drizzle-orm";
-import { payoutAccounts, payouts, tournaments, type Db } from "@force-pulse/db";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { ledgerEntries, payoutAccounts, payouts, tournaments, users, type Db } from "@force-pulse/db";
 import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
 import { CLOCK, DB, type Clock } from "../common/tokens";
@@ -78,6 +78,31 @@ export class PayoutsService {
       await this.audit.record({ entity: "payout", entityId: p.id, action: "mark_failed", reason, userId: actorId }, tx);
       return row;
     });
+  }
+
+  /** Dashboard alert: completed tournaments whose organiser is still owed money, largest first. */
+  due() {
+    const owed = sql<number>`sum(${ledgerEntries.creditPaise} - ${ledgerEntries.debitPaise})::int`;
+    return this.db
+      .select({
+        tournamentId: tournaments.id,
+        tournamentName: tournaments.name,
+        tournamentUpdatedAt: tournaments.updatedAt,
+        organiserUserId: tournaments.organiserUserId,
+        organiserPhone: users.phone,
+        contactName: tournaments.contactName,
+        owedPaise: owed,
+        bankVerified: sql<boolean>`coalesce(${payoutAccounts.verified}, false)`,
+        accountLast4: payoutAccounts.accountLast4,
+      })
+      .from(ledgerEntries)
+      .innerJoin(tournaments, eq(tournaments.id, ledgerEntries.tournamentId))
+      .innerJoin(users, eq(users.id, tournaments.organiserUserId))
+      .leftJoin(payoutAccounts, eq(payoutAccounts.userId, tournaments.organiserUserId))
+      .where(and(eq(ledgerEntries.account, "organiser_payable"), eq(tournaments.status, "completed")))
+      .groupBy(tournaments.id, users.phone, payoutAccounts.verified, payoutAccounts.accountLast4)
+      .having(sql`${owed} > 0`)
+      .orderBy(desc(owed));
   }
 
   list(statuses?: PayoutRow["status"][]) {
