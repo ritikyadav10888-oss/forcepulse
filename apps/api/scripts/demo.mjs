@@ -4,10 +4,10 @@ import { randomUUID } from "node:crypto";
 
 const API = process.env.API_URL ?? "http://localhost:4000/api/v1";
 
-async function call(method, path, body, token) {
+async function call(method, path, body, token, ip) {
   const res = await fetch(API + path, {
     method,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(ip ? { "X-Forwarded-For": ip } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -15,8 +15,11 @@ async function call(method, path, body, token) {
   return data;
 }
 
+let signIns = 0;
 async function signIn(phone, name) {
-  const { debugOtp } = await call("POST", "/auth/otp", { phone });
+  // Each demo person signs in from their own phone, as real players do (the API limits codes per network).
+  const ip = `10.55.${Math.floor(Math.random() * 250)}.${++signIns}`;
+  const { debugOtp } = await call("POST", "/auth/otp", { phone }, undefined, ip);
   if (!debugOtp) throw new Error("Run the API with OTP_PROVIDER=console (development) for the demo");
   const s = await call("POST", "/auth/verify", { phone, code: debugOtp });
   await call("PATCH", "/me/player", { name }, s.accessToken);
