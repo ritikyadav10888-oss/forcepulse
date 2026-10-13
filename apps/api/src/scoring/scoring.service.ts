@@ -151,7 +151,11 @@ export class ScoringService {
     const names = await this.fixtures.names([m.homeEntrantId, m.awayEntrantId]);
     const base = {
       matchId: m.id,
+      tournamentId: m.tournamentId,
       sportId,
+      scorerUserId: m.scorerUserId,
+      /** Frozen rules and squads, so a scoring device can work the score out itself (FR-SCR-12). */
+      rules: m.ruleSnapshot,
       status: m.status,
       homeName: m.homeEntrantId ? (names.get(m.homeEntrantId) ?? "") : null,
       awayName: m.awayEntrantId ? (names.get(m.awayEntrantId) ?? "") : null,

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { eq } from "drizzle-orm";
-import { payoutAccounts, type Db } from "@force-pulse/db";
+import { payoutAccounts, users, type Db } from "@force-pulse/db";
 import { ApiError } from "../common/api-error";
 import { AuditService } from "../common/audit.service";
 import { encrypt } from "../common/crypto";
@@ -24,6 +24,16 @@ export class PayoutAccountsService {
   async mine(userId: string) {
     const [row] = await this.db.select().from(payoutAccounts).where(eq(payoutAccounts.userId, userId));
     return row ? this.view(row) : null;
+  }
+
+  /** Accounts waiting for staff to check them, so paid registration can open. */
+  async unverified() {
+    const rows = await this.db
+      .select({ a: payoutAccounts, phone: users.phone })
+      .from(payoutAccounts)
+      .innerJoin(users, eq(users.id, payoutAccounts.userId))
+      .where(eq(payoutAccounts.verified, false));
+    return rows.map(({ a, phone }) => ({ userId: a.userId, phone, ...this.view(a) }));
   }
 
   /** Saving new details always clears verification: the new account must be checked again. */

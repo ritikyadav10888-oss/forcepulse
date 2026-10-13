@@ -115,6 +115,12 @@ export class PaymentsController {
     return this.payments.adminPayments(parse(PaymentsQuery, q).status);
   }
 
+  @Get("admin/payout-accounts")
+  @RequireRole("super_admin")
+  unverifiedAccounts() {
+    return this.accounts.unverified();
+  }
+
   @Post("admin/payout-accounts/:userId/verify")
   @HttpCode(200)
   @RequireRole("super_admin")

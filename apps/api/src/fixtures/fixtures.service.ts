@@ -137,6 +137,12 @@ export class FixturesService {
   }
 
   /** Points tables per group, worked out from results each time (FR-TRN-11). */
+  /** How each sport is played: format and scoring rules (organiser screen, public pages). */
+  async formats(tournamentId: string, viewer?: AuthContext) {
+    await this.tournaments.get(tournamentId, viewer);
+    return this.db.select().from(formats).where(eq(formats.tournamentId, tournamentId));
+  }
+
   async standings(tournamentId: string, viewer?: AuthContext) {
     await this.tournaments.get(tournamentId, viewer);
     const fs = await this.db.select().from(formats).where(and(eq(formats.tournamentId, tournamentId), ne(formats.type, "knockout")));

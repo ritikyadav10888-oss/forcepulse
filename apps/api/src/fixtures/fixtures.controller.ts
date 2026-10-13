@@ -76,6 +76,12 @@ export class FixturesController {
     return this.fixtures.list(id, auth);
   }
 
+  @Get("tournaments/:id/formats")
+  @Public()
+  formats(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth?: AuthContext) {
+    return this.fixtures.formats(id, auth);
+  }
+
   @Get("tournaments/:id/standings")
   @Public()
   standings(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth?: AuthContext) {

@@ -6,7 +6,8 @@
     "packages/shared",
     "packages/scoring",
     "packages/db",
-    "apps/api"
+    "apps/api",
+    "apps/web"
   ],
   "scripts": {
     "build": "tsc -b packages/shared packages/scoring packages/db apps/api",
@@ -15,7 +16,10 @@
     "dev": "npm run dev -w @force-pulse/api",
     "db:generate": "npm run generate -w @force-pulse/db",
     "db:migrate": "npm run migrate -w @force-pulse/db",
-    "db:seed": "npm run seed -w @force-pulse/db"
+    "db:seed": "npm run seed -w @force-pulse/db",
+    "demo": "npm run demo -w @force-pulse/api",
+    "dev:web": "npm run dev -w @force-pulse/web",
+    "web": "npm run dev -w @force-pulse/web"
   },
   "engines": {
     "node": ">=22"

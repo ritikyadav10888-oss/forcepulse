@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/*
+ * Force Pulse design tokens (Flow Charts & UI Design Direction; System Design 13).
+ * One cream surface everywhere; near-white only on the live scoring screen. Gold means live, sold or won,
+ * and is always a fill with ink text (8.9:1), never text on cream (1.8:1).
+ */
+@theme {
+  --color-cream: #f3eee5;
+  --color-court: #fafaf8;
+  --color-ink: #0b1220;
+  --color-navy: #0b1f3a;
+  --color-muted: #5b6270;
+  --color-line: #ddd5c7;
+  --color-gold: #d4af37;
+  --color-good: #1e8e5a;
+  --color-warn: #c98a1e;
+  --color-bad: #c23b3b;
+
+  --font-sans: var(--font-manrope), system-ui, sans-serif;
+  --font-score: var(--font-barlow), "Arial Narrow", sans-serif;
+}
+
+html {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Scores and clocks: equal-width digits so 9 → 10 never shifts the board. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-navy);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The live marker: the one pulse in the product, and it only means "happening now". */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
