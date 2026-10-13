@@ -41,9 +41,13 @@ export default function TournamentConsole() {
       </p>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="font-score text-4xl font-bold uppercase tracking-wide">{t.name}</h1>
-        <Link href={`/t/${t.slug}`} className="text-sm font-semibold text-navy underline">
-          Public page
-        </Link>
+        {t.status === "draft" ? (
+          <span className="text-sm text-muted">Draft: the public page appears when registration opens</span>
+        ) : (
+          <Link href={`/t/${t.slug}`} className="text-sm font-semibold text-navy underline">
+            Public page
+          </Link>
+        )}
       </div>
 
       <div role="tablist" className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
