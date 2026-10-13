@@ -28,7 +28,8 @@ export async function openDb(url = process.env.DATABASE_URL ?? ""): Promise<DbHa
     const target = url.slice("pglite:".length);
     let dataDir: string | undefined;
     if (target && target !== "memory") {
-      dataDir = path.resolve(target);
+      // Relative to the repo root, so the API, migrations and seed all open the same database whatever folder they run from.
+      dataDir = path.resolve(__dirname, "../../..", target);
       mkdirSync(dataDir, { recursive: true });
     }
     const client = new PGlite(dataDir);

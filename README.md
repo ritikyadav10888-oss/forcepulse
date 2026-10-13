@@ -32,6 +32,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | `npm run build` | Type-check and compile everything |
 | `npm run db:generate` | Write a new SQL migration after a schema change (review it before committing) |
 | `npm run db:migrate` | Apply migrations to `DATABASE_URL` |
+| `E2E_PREFIX=73 node apps/api/scripts/e2e-scenario.mjs report.md` | End-to-end scenario against a running API: 2 tournaments, 6 sports, 80 players, auction; writes a report |
 | `npm run db:seed` | Sports, fee settings and the first super admin (safe to rerun) |
 | `npm run load-pincodes -w @force-pulse/db -- <file.csv>` | Load the India Post pincode CSV from data.gov.in |
 
