@@ -30,6 +30,8 @@ html {
 
 body {
   min-height: 100dvh;
+  /* Full-width banners must never cause sideways scrolling. */
+  overflow-x: clip;
 }
 
 /* Scores and clocks: equal-width digits so 9 → 10 never shifts the board. */

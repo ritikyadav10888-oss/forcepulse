@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import {
   categories,
   enrollments,
@@ -137,6 +137,21 @@ export class FixturesService {
   }
 
   /** Points tables per group, worked out from results each time (FR-TRN-11). */
+  /** Live matches in public, published tournaments, newest first (at most 12). Casual matches stay private. */
+  async liveNow() {
+    const rows = await this.db
+      .select({ m: matches, tournamentName: tournaments.name, slug: tournaments.slug, sportId: tournamentEvents.sportId })
+      .from(matches)
+      .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+      .innerJoin(formats, eq(formats.id, matches.formatId))
+      .innerJoin(tournamentEvents, eq(tournamentEvents.id, formats.eventId))
+      .where(and(eq(matches.status, "live"), eq(tournaments.visibility, "public"), eq(tournaments.kind, "tournament"), ne(tournaments.status, "draft")))
+      .orderBy(desc(matches.startedAt))
+      .limit(12);
+    const names = await this.names(rows.flatMap(({ m }) => [m.homeEntrantId, m.awayEntrantId]));
+    return rows.map(({ m, tournamentName, slug, sportId }) => ({ ...this.view(m, names), tournamentName, slug, sportId }));
+  }
+
   /** How each sport is played: format and scoring rules (organiser screen, public pages). */
   async formats(tournamentId: string, viewer?: AuthContext) {
     await this.tournaments.get(tournamentId, viewer);

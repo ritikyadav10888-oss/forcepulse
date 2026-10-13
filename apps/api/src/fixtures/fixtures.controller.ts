@@ -76,6 +76,13 @@ export class FixturesController {
     return this.fixtures.list(id, auth);
   }
 
+  /** Matches being played right now in public tournaments (home page). */
+  @Get("matches/live-now")
+  @Public()
+  liveNow() {
+    return this.fixtures.liveNow();
+  }
+
   @Get("tournaments/:id/formats")
   @Public()
   formats(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth?: AuthContext) {
