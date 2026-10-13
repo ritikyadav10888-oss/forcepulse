@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CurrentAuth, Public, RequireRole, type AuthContext } from "../common/policy";
 import { parse } from "../common/validate";
 import { PlayersService } from "./players.service";
+import { ProfileService } from "./profile.service";
 
 const ProfilePatch = z
   .object({
@@ -24,7 +25,10 @@ const SportProfile = z.object({
 
 @Controller()
 export class PlayersController {
-  constructor(private readonly players: PlayersService) {}
+  constructor(
+    private readonly players: PlayersService,
+    private readonly profiles: ProfileService,
+  ) {}
 
   @Get("me/player")
   @RequireRole("player")
@@ -57,6 +61,13 @@ export class PlayersController {
   @Public()
   byId(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth?: AuthContext) {
     return this.players.byId(id, auth);
+  }
+
+  /** Stats, history, badges and recent matches (FR-PRO-01 to 05). */
+  @Get("players/:id/profile")
+  @Public()
+  profile(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth?: AuthContext) {
+    return this.profiles.profile(id, auth);
   }
 
   @Get("players/:id/sports")

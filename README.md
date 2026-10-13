@@ -60,7 +60,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | --- | --- |
 | Auth | `POST /auth/otp`, `POST /auth/verify`, `POST /auth/staff/login`, `POST /auth/refresh`, `POST /auth/logout` |
 | Me | `GET /me`, `GET /me/roles`, `GET/PATCH /me/player`, `PUT/DELETE /me/player/sports/:sportId` |
-| Public | `GET /players/:id`, `GET /players/:id/sports`, `GET /sports`, `GET /sports/:id`, `GET /health` |
+| Public | `GET /players/:id`, `GET /players/:id/profile` (stats, history, badges, last 10 matches), `GET /players/:id/sports`, `GET /sports`, `GET /sports/:id`, `GET /health` |
 | Admin | `GET /admin/users/:id/roles`, `POST /admin/users/:id/roles/:role/suspend\|restore`, `PUT /admin/users/:id/platform-role`, `POST /admin/players/:id/suspend\|restore`, `GET/PUT /admin/settings/fees`, `PUT /admin/sports/:id`, `GET /admin/audit-logs` |
 | Tournaments | `POST /tournaments`, `GET /tournaments` (public list), `GET /tournaments/:idOrSlug`, `GET /me/tournaments`, `PATCH /tournaments/:id`, `PUT /tournaments/:id/events`, `PUT /tournaments/:id/status` |
 | Form builder | `GET /forms/suggested-fields`, `GET/PUT /tournaments/:id/form`, `POST /tournaments/:id/form/publish`, `GET /t/:slug` (registration page) |

@@ -23,6 +23,7 @@ import { HealthController } from "./health.controller";
 import { MeController } from "./me/me.controller";
 import { PlayersController } from "./players/players.controller";
 import { PlayersService } from "./players/players.service";
+import { ProfileService } from "./players/profile.service";
 import { RealtimeGateway } from "./realtime.gateway";
 import { RolesService } from "./roles/roles.service";
 import { RazorpayGateway, UnconfiguredGateway, type PaymentGateway } from "./payments/gateway";
@@ -91,6 +92,7 @@ export class AppModule {
         TokensService,
         AuthService,
         PlayersService,
+        ProfileService,
         TournamentsService,
         RegistrationsService,
         UploadsService,

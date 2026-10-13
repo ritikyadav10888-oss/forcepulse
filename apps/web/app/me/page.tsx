@@ -82,7 +82,11 @@ export default function AccountPage() {
       <section>
         <p className="text-sm font-semibold text-muted">{user.roleLabel}</p>
         <h1 className="font-score text-4xl font-bold uppercase tracking-wide">{player?.name || "Your account"}</h1>
-        {player ? <p className="mt-1 text-sm text-muted">Player ID <span className="font-bold tabular text-ink">{player.playerCode}</span> · {user.phone}</p> : null}
+        {player ? <p className="mt-1 text-sm text-muted">Player ID <span className="font-bold tabular text-ink">{player.playerCode}</span> · {user.phone} ·{" "}
+            <Link href={`/p/${player.id}`} className="font-semibold text-navy underline">
+              View my profile
+            </Link>
+          </p> : null}
 
         <h2 className="mt-10 text-xs font-bold uppercase tracking-wider text-muted">My registrations</h2>
         {entries.length ? (
