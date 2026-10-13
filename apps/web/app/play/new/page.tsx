@@ -20,7 +20,7 @@ export default function NewCasualMatch() {
   const sports = Object.values(SCORING_MODULES);
   const [sportId, setSportId] = useState("badminton");
   const [sides, setSides] = useState<[Side, Side]>([blank("Home"), blank("Away")]);
-  const { busy, error, run } = useAction();
+  const { busy, error, run, setError } = useAction();
   const module = SCORING_MODULES[sportId];
 
   useEffect(() => {
@@ -36,6 +36,12 @@ export default function NewCasualMatch() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const rules = Object.fromEntries((module.ruleKnobs ?? []).filter((k) => String(f.get(k.key) ?? "") !== "").map((k) => [k.key, k.type === "number" ? Number(f.get(k.key)) : String(f.get(k.key))]));
+    // Players are matched by mobile, so a name alone can't be sent.
+    for (const s of sides) {
+      const bad = s.players.find((p) => (p.phone.trim() || p.name.trim()) && !validPhone(p.phone));
+      if (bad) return setError(`${s.name}: ${bad.name.trim() || "a player"} needs a 10-digit mobile number.`);
+      if (!s.players.some((p) => validPhone(p.phone))) return setError(`${s.name}: add at least one player with a mobile number.`);
+    }
     const clean = (s: Side) => ({ name: s.name, players: s.players.filter((p) => p.phone.trim()).map((p) => ({ phone: p.phone, ...(p.name.trim() ? { name: p.name } : {}) })) });
     const r = await run(() => call<{ matchId: string }>("/matches/casual", { method: "POST", body: { sportId, rules, home: clean(sides[0]), away: clean(sides[1]) } }));
     if (r) router.push(`/score/${r.matchId}`);
