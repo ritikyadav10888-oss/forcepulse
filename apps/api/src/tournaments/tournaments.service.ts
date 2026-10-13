@@ -187,7 +187,7 @@ export class TournamentsService {
   }
 
   async mine(userId: string): Promise<TournamentView[]> {
-    const rows = await this.db.select().from(tournaments).where(eq(tournaments.organiserUserId, userId)).orderBy(desc(tournaments.createdAt));
+    const rows = await this.db.select().from(tournaments).where(and(eq(tournaments.organiserUserId, userId), eq(tournaments.kind, "tournament"))).orderBy(desc(tournaments.createdAt));
     return this.views(rows);
   }
 

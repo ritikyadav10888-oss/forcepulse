@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getScoringModule, UNDO_ACTION, type ActionField, type ScoreEvent } from "@force-pulse/scoring";
+import { MatchClock } from "@/components/match-clock";
 import { ApiError, apiFetch, PUBLIC_API_URL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { sportName } from "@/lib/format";
@@ -147,6 +148,8 @@ export default function ScorePad() {
   const setup = module && state ? module.setupSteps.find((s) => !s.done(state)) : undefined;
   const actions = module && state && !setup && !state.pending ? module.actions.filter((a) => !a.visible || a.visible(state)) : [];
   const playerName = (p: string) => names[p] ?? p.slice(0, 8);
+  // Timed sports set minutes per period or half (FR-SCR-11).
+  const periodMinutes = Number(live.rules?.periodMinutes ?? live.rules?.halfMinutes ?? live.rules?.quarterMinutes ?? 0);
 
   return (
     <div className="-mx-4 min-h-[100dvh] bg-court px-4 pb-10 sm:-mx-6 sm:px-6">
@@ -163,6 +166,8 @@ export default function ScorePad() {
         <p className="truncate text-lg font-bold">{live.awayName ?? "Away"}</p>
       </div>
       {summary ? <p className="text-center font-score text-2xl tabular">{summary.headline}{summary.subline ? ` · ${summary.subline}` : ""}</p> : null}
+
+      {periodMinutes > 0 && state?.phase !== "complete" ? <MatchClock matchId={id} periodMinutes={periodMinutes} period={state?.periodLabel ?? "Period 1"} /> : null}
 
       {note ? <p role="alert" className="mt-4 rounded-lg bg-bad/15 px-3 py-2 text-sm font-semibold">{note}</p> : null}
 

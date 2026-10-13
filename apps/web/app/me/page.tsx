@@ -43,6 +43,7 @@ export default function AccountPage() {
   const [player, setPlayer] = useState<Player | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [mine, setMine] = useState<Tournament[]>([]);
+  const [casual, setCasual] = useState<{ matchId: string; name: string; status: string; homeScore: number | null; awayScore: number | null }[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +54,7 @@ export default function AccountPage() {
       setPlayer(p);
       setEntries(e);
       setMine(t);
+      void call<typeof casual>("/me/casual-matches").then(setCasual);
     });
   }, [user, loading, call, router]);
 
@@ -110,6 +112,27 @@ export default function AccountPage() {
               </Link>
             </Empty>
           </div>
+        )}
+
+        <div className="mt-10 flex items-center justify-between gap-3">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Casual matches</h2>
+          <Link href="/play/new" className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy/90">
+            New casual match
+          </Link>
+        </div>
+        {casual.length ? (
+          <ul className="mt-2 divide-y divide-line border-y border-line">
+            {casual.map((c) => (
+              <li key={c.matchId}>
+                <Link href={c.status === "completed" ? `/m/${c.matchId}` : `/score/${c.matchId}`} className="flex items-center justify-between gap-3 py-3 text-sm hover:bg-line/40">
+                  <span className="font-semibold">{c.name}</span>
+                  <span className="tabular text-muted">{c.status === "completed" ? `${c.homeScore}–${c.awayScore}` : c.status === "live" ? "Scoring" : "Not started"}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Score a quick game with friends: pick a sport, add players by mobile.</p>
         )}
 
         {mine.length ? (

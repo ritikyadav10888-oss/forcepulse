@@ -71,6 +71,13 @@
       "when": 1791577584812,
       "tag": "0009_auction",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791885416763,
+      "tag": "0010_casual_matches",
+      "breakpoints": true
     }
   ]
 }

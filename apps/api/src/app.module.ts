@@ -35,6 +35,7 @@ import { PincodesController } from "./pincodes.controller";
 import { RegistrationsController } from "./registrations/registrations.controller";
 import { RegistrationsService } from "./registrations/registrations.service";
 import { ScoringController } from "./scoring/scoring.controller";
+import { CasualService } from "./scoring/casual.service";
 import { ScoringService } from "./scoring/scoring.service";
 import { SportsController } from "./sports/sports.controller";
 import { TournamentsController } from "./tournaments/tournaments.controller";
@@ -101,6 +102,7 @@ export class AppModule {
         PayoutAccountsService,
         FixturesService,
         ScoringService,
+        CasualService,
         RealtimeGateway,
         AuctionService,
       ],

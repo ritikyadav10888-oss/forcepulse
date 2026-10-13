@@ -54,6 +54,8 @@ export const tournaments = competition.table(
     registrationDeadline: timestamp("registration_deadline", { withTimezone: true }),
     status: text("status").$type<TournamentStatus>().notNull().default("draft"),
     visibility: text("visibility").$type<"public" | "private">().notNull().default("public"),
+    /** casual: a one-off match a player set up (FR-SCR-05), held as a private one-match tournament. */
+    kind: text("kind").$type<"tournament" | "casual">().notNull().default("tournament"),
     /** Private tournaments only: invite list of phones, or a shareable link. */
     inviteMode: text("invite_mode").$type<"list" | "link">(),
     /** Review add-on (FR-REG-12): entries wait for the organiser to approve, reject or waitlist. */

@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from "@ne
 import { z } from "zod";
 import { Authenticated, CurrentAuth, Public, RequireRole, type AuthContext } from "../common/policy";
 import { parse } from "../common/validate";
+import { CasualService } from "./casual.service";
 import { ScoringService } from "./scoring.service";
 
 const Device = z.string().trim().min(8).max(100);
@@ -27,13 +28,39 @@ const SyncInput = z
 const RuleSetInput = z
   .object({ sportId: z.string().max(40), name: z.string().trim().min(1).max(80), config: z.record(z.string(), z.union([z.number(), z.string()])) })
   .strict();
+const CasualSide = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    players: z.array(z.object({ phone: z.string().min(1).max(20), name: z.string().trim().max(80).optional() }).strict()).min(1).max(30),
+  })
+  .strict();
+const CasualInput = z
+  .object({ sportId: z.string().max(40), rules: z.record(z.string(), z.union([z.number(), z.string()])), home: CasualSide, away: CasualSide })
+  .strict();
+
 const CloseInput = z.object({ playerOfMatchId: z.uuid().nullable().optional(), winnerEntrantId: z.uuid().nullable().optional() }).strict();
 
 @Controller()
 export class ScoringController {
-  constructor(private readonly scoring: ScoringService) {}
+  constructor(
+    private readonly scoring: ScoringService,
+    private readonly casual: CasualService,
+  ) {}
 
   /** The settings an organiser chooses for a sport, with typical values as suggestions only (FR-SCR-01/02). */
+  /** A one-off match between two sides of players added by mobile (FR-SCR-05). */
+  @Post("matches/casual")
+  @RequireRole("player")
+  createCasual(@Body() body: unknown, @CurrentAuth() auth: AuthContext) {
+    return this.casual.create(auth, parse(CasualInput, body));
+  }
+
+  @Get("me/casual-matches")
+  @RequireRole("player")
+  myCasual(@CurrentAuth() auth: AuthContext) {
+    return this.casual.mine(auth);
+  }
+
   @Get("sports/:id/rules")
   @Public()
   rules(@Param("id") id: string) {

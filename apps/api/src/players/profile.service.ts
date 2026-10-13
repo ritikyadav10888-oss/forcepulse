@@ -61,6 +61,7 @@ export class ProfileService {
         status: enrollments.status,
         tournamentId: tournaments.id,
         tournamentName: tournaments.name,
+        kind: tournaments.kind,
         slug: tournaments.slug,
         startsAt: tournaments.startsAt,
         sportId: tournamentEvents.sportId,
@@ -105,7 +106,7 @@ export class ProfileService {
     });
 
     const finishes = await this.finishes(mine, entries.map((e) => e.tournamentId));
-    const history = entries.map((e) => ({
+    const history = entries.filter((e) => e.kind === "tournament").map((e) => ({
       tournamentId: e.tournamentId,
       tournamentName: e.tournamentName,
       slug: e.slug,
@@ -134,7 +135,7 @@ export class ProfileService {
       .where(eq(auctionLots.playerId, playerId));
 
     const roles = player.userId ? (await this.db.select({ role: userRoles.role }).from(userRoles).where(and(eq(userRoles.userId, player.userId), eq(userRoles.suspended, false)))).map((r) => r.role as Role) : [];
-    const [org] = player.userId ? await this.db.select({ n: count() }).from(tournaments).where(eq(tournaments.organiserUserId, player.userId)) : [{ n: 0 }];
+    const [org] = player.userId ? await this.db.select({ n: count() }).from(tournaments).where(and(eq(tournaments.organiserUserId, player.userId), eq(tournaments.kind, "tournament"))) : [{ n: 0 }];
     const [scored] = player.userId ? await this.db.select({ n: count() }).from(matches).where(and(eq(matches.scorerUserId, player.userId), inArray(matches.status, [...DONE]))) : [{ n: 0 }];
 
     const totals = sportStats.reduce((a, s) => ({ played: a.played + s.played, won: a.won + s.won }), { played: 0, won: 0 });
