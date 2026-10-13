@@ -23,10 +23,19 @@ export interface GatewayPayment {
   error_description?: string | null;
 }
 
+/** Razorpay refund entity (the fields we keep). */
+export interface GatewayRefund {
+  id: string;
+  amount: number;
+  status: "pending" | "processed" | "failed";
+}
+
 export interface PaymentGateway {
   readonly keyId: string;
   createOrder(amountPaise: number, receipt: string, notes: Record<string, string>): Promise<GatewayOrder>;
   fetchPayment(paymentId: string): Promise<GatewayPayment>;
+  /** Part refund of a captured payment, in paise. */
+  refund(paymentId: string, amountPaise: number, notes: Record<string, string>): Promise<GatewayRefund>;
   /** X-Razorpay-Signature over the raw webhook body. */
   verifyWebhook(rawBody: Buffer, signature: string): boolean;
   /** razorpay_signature returned to the browser by Checkout. */
@@ -60,6 +69,11 @@ export class RazorpayGateway implements PaymentGateway {
   fetchPayment(paymentId: string) {
     if (!/^pay_[A-Za-z0-9]+$/.test(paymentId)) throw new ApiError("BAD_REQUEST", "Unknown payment.");
     return this.call<GatewayPayment>("GET", `/payments/${paymentId}`);
+  }
+
+  refund(paymentId: string, amountPaise: number, notes: Record<string, string>) {
+    if (!/^pay_[A-Za-z0-9]+$/.test(paymentId)) throw new ApiError("BAD_REQUEST", "Unknown payment.");
+    return this.call<GatewayRefund>("POST", `/payments/${paymentId}/refund`, { amount: amountPaise, notes });
   }
 
   verifyWebhook(rawBody: Buffer, signature: string) {
@@ -99,6 +113,9 @@ export class UnconfiguredGateway implements PaymentGateway {
     this.fail();
   }
   fetchPayment(): Promise<GatewayPayment> {
+    this.fail();
+  }
+  refund(): Promise<GatewayRefund> {
     this.fail();
   }
   verifyWebhook() {

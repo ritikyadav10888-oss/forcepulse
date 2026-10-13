@@ -35,6 +35,10 @@ export function EntriesTab({ t }: TabProps) {
     void run(() => call(`/enrollments/${id}/review`, { method: "POST", body: { action, ...(reason ? { reason } : {}) } })).then(load);
   };
   const remove = (id: string) => void run(() => call(`/enrollments/${id}/remove`, { method: "POST", body: {} })).then(load);
+  const refund = (r: EntryRow) => {
+    const reason = prompt(`Refund ${r.registrationNo}? The player gets back your 97% share; the platform and convenience fees aren't refunded. Reason:`);
+    if (reason && reason.trim().length >= 3) void run(() => call(`/enrollments/${r.id}/refund`, { method: "POST", body: { reason } }), "Refunded.").then(load);
+  };
   const sport = (eventId: string) => sportName(t.events.find((e) => e.id === eventId)?.sportId ?? "");
 
   return (
@@ -78,7 +82,7 @@ export function EntriesTab({ t }: TabProps) {
                   </span>
                 </td>
                 <td>{sport(r.eventId)}</td>
-                <td>{r.status.replace(/_/g, " ")}</td>
+                <td>{r.status.replace(/_/g, " ")}{r.paymentStatus === "refunded" ? " · refunded" : ""}</td>
                 <td className="whitespace-nowrap text-right">
                   {r.status === "pending_review" || r.status === "waitlisted" ? (
                     <>
@@ -86,6 +90,9 @@ export function EntriesTab({ t }: TabProps) {
                       {r.status === "pending_review" ? <button disabled={busy} onClick={() => review(r.id, "waitlist")} className="mr-2 font-semibold text-navy underline">Waitlist</button> : null}
                       <button disabled={busy} onClick={() => review(r.id, "reject")} className="mr-2 font-semibold text-bad underline">Reject</button>
                     </>
+                  ) : null}
+                  {r.paymentStatus === "paid" ? (
+                    <button disabled={busy} onClick={() => refund(r)} className="mr-2 font-semibold text-bad underline">Refund</button>
                   ) : null}
                   {["enrolled", "pending_review", "waitlisted", "payment_pending"].includes(r.status) ? (
                     <button disabled={busy} onClick={() => remove(r.id)} className="font-semibold text-muted underline">Remove</button>

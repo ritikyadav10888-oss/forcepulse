@@ -134,3 +134,19 @@ export const payouts = finance.table(
   },
   (t) => [uniqueIndex("payouts_tournament_sequence").on(t.tournamentId, t.sequence), index("payouts_due").on(t.scheduledOn, t.status)],
 );
+
+/**
+ * An organiser's refund of one paid entry before payout (FR-PAY-14). Drawn only from the organiser's share; the
+ * platform fee and the convenience fee are never refunded (FR-PAY-13). One refund per entry.
+ */
+export const refunds = finance.table("refunds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  paymentId: uuid("payment_id").notNull().references(() => payments.id),
+  enrollmentId: uuid("enrollment_id").notNull().unique().references(() => enrollments.id),
+  amountPaise: integer("amount_paise").notNull(),
+  razorpayRefundId: text("razorpay_refund_id").unique(),
+  status: text("status").$type<"processed" | "pending" | "failed">().notNull(),
+  reason: text("reason").notNull(),
+  byUserId: uuid("by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

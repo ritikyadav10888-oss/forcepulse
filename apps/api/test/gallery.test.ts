@@ -1,3 +1,9 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import ffmpegPath from "ffmpeg-static";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bearer, signIn, startHarness, type Harness } from "./harness";
 
@@ -68,4 +74,28 @@ describe("tournament gallery (FR-MED-01 to 05, AC-08)", () => {
     const res = await h.http().post("/api/v1/uploads").set(bearer(org.accessToken)).field("kind", "media").attach("file", big, "big.png").expect(400);
     expect(res.body.message).toBe("Photos must be 5 MB or smaller.");
   });
+
+  it("makes a square preview for photos and a poster frame for videos (FR-MED-06)", async () => {
+    const org = await signIn(h, "9200000009");
+    const t = (
+      await h.http().post("/api/v1/tournaments").set(bearer(org.accessToken))
+        .send({ name: "Thumbs Cup", startsAt: "2026-11-20T03:30:00Z", endsAt: "2026-11-21T03:30:00Z", status: "enrollment_open", events: [{ sportId: "badminton", entryType: "individual" }] })
+        .expect(201)
+    ).body;
+    const photo = await sharp({ create: { width: 1200, height: 800, channels: 3, background: "#0b1f3a" } }).jpeg().toBuffer();
+    const dir = mkdtempSync(path.join(tmpdir(), "fp-test-"));
+    const clip = path.join(dir, "clip.mp4");
+    execFileSync(ffmpegPath!, ["-v", "error", "-f", "lavfi", "-i", "color=c=red:s=160x120:d=2", "-pix_fmt", "yuv420p", clip]);
+
+    for (const [bytes, name, type] of [[photo, "court.jpg", "photo"], [readFileSync(clip), "clip.mp4", "video"]] as const) {
+      const up = (await h.http().post("/api/v1/uploads").set(bearer(org.accessToken)).field("kind", "media").attach("file", bytes, name).expect(201)).body;
+      const item = (await h.http().post(`/api/v1/tournaments/${t.id}/media`).set(bearer(org.accessToken)).send({ uploadKey: up.key }).expect(201)).body;
+      expect(item).toMatchObject({ type, thumbUrl: expect.stringMatching(/^\/api\/v1\/uploads\/upl_/) });
+      // The preview is public, WebP and 480 x 480.
+      const thumb = await h.http().get(item.thumbUrl).buffer(true).parse((res, cb) => { const c: Buffer[] = []; res.on("data", (d: Buffer) => c.push(d)); res.on("end", () => cb(null, Buffer.concat(c))); }).expect(200);
+      expect(thumb.headers["content-type"]).toBe("image/webp");
+      const meta = await sharp(thumb.body as Buffer).metadata();
+      expect([meta.width, meta.height]).toEqual([480, 480]);
+    }
+  }, 60_000);
 });

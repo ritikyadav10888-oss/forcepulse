@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Headers, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, type RawBodyRequest } from "@nestjs/common";
+import { Body, Controller, Get, Header, Headers, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, StreamableFile, type RawBodyRequest } from "@nestjs/common";
 import type { Request } from "express";
 import { z } from "zod";
 import { Authenticated, CurrentAuth, Public, RequireRole, type AuthContext } from "../common/policy";
@@ -64,6 +64,20 @@ export class PaymentsController {
   @Authenticated()
   get(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth: AuthContext) {
     return this.payments.get(auth, id);
+  }
+
+  /** FR-PAY-14: the organiser refunds a paid entry from their share, before payout. */
+  @Post("enrollments/:id/refund")
+  @HttpCode(200)
+  @Authenticated()
+  refund(@Param("id", ParseUUIDPipe) id: string, @Body() body: unknown, @CurrentAuth() auth: AuthContext) {
+    return this.payments.refundEntry(auth, id, parse(Reason, body).reason);
+  }
+
+  @Get("payments/:id/receipt.pdf")
+  @Authenticated()
+  async receiptPdf(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth: AuthContext) {
+    return new StreamableFile(await this.payments.receiptPdf(auth, id), { type: "application/pdf", disposition: `attachment; filename="force-pulse-receipt-${id.slice(0, 8)}.pdf"` });
   }
 
   @Get("payments/:id/receipt")

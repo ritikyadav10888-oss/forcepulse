@@ -68,7 +68,7 @@ Super admin: `npm run db:seed` creates it from `SEED_SUPER_ADMIN_EMAIL` / `SEED_
 | Registration | `POST /tournaments/:id/registrations`, `POST /tournaments/:id/events/:eventId/teams`, `GET /teams/code/:code`, `POST /teams/join`, `GET /me/enrollments`, `GET/POST /me/managed-players` |
 | Organiser | `GET /tournaments/:id/enrollments`, `GET /tournaments/:id/enrollments.csv`, `POST /enrollments/:id/remove`, `POST /enrollments/:id/review`, `PATCH /enrollments/:id/flag` |
 | Files and pincodes | `POST /uploads` (multipart: `file`, `kind`), `GET /uploads/:key`, `GET /pincodes/:pincode` |
-| Payments | `POST /payments/orders`, `POST /payments/webhook` (Razorpay, signature-checked), `POST /payments/confirm`, `GET /me/payments`, `GET /payments/:id`, `GET /payments/:id/receipt` |
+| Payments | `POST /payments/orders`, `POST /payments/webhook` (Razorpay, signature-checked), `POST /payments/confirm`, `GET /me/payments`, `GET /payments/:id`, `GET /payments/:id/receipt`, `GET /payments/:id/receipt.pdf`, `POST /enrollments/:id/refund` (organiser, before payout) |
 | Organiser money | `GET/PUT /payout-accounts/me`, `GET /tournaments/:id/finance`, `GET /tournaments/:id/statement.csv` |
 | Admin money | `GET /admin/finance`, `GET /admin/payments`, `GET /admin/payouts/due` (organisers waiting to be paid), `GET /admin/payouts`, `POST /admin/tournaments/:id/payouts`, `POST /admin/payouts/:id/mark-paid\|mark-failed`, `POST /admin/payout-accounts/:userId/verify` |
 | Fixtures and results | `PUT /events/:eventId/format`, `POST /formats/:id/fixtures`, `GET /tournaments/:id/matches`, `GET /tournaments/:id/standings`, `PATCH /matches/:id`, `POST /matches/:id/cancel`, `POST /matches/:id/result` |

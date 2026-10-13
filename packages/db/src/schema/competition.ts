@@ -201,7 +201,7 @@ export const enrollments = competition.table(
     isCaptain: boolean("is_captain").notNull().default(false),
     joinedVia: text("joined_via").$type<"form" | "team_code" | "auction" | "organiser">().notNull().default("form"),
     status: text("status").$type<EnrollmentStatus>().notNull(),
-    paymentStatus: text("payment_status").$type<"not_required" | "pending" | "paid" | "failed">().notNull(),
+    paymentStatus: text("payment_status").$type<"not_required" | "pending" | "paid" | "failed" | "refunded">().notNull(),
     /** Fee frozen at registration (paise). */
     feePaise: integer("fee_paise").notNull().default(0),
     /** payment_pending only: the place is released after this (FR-PAY-07). */
@@ -314,6 +314,8 @@ export const mediaItems = competition.table(
     id: uuid("id").primaryKey().defaultRandom(),
     tournamentId: uuid("tournament_id").notNull().references(() => tournaments.id, { onDelete: "cascade" }),
     uploadKey: text("upload_key").notNull().unique(),
+    /** Square WebP preview: a resized photo or a video poster frame (FR-MED-06). Null if one couldn't be made. */
+    thumbKey: text("thumb_key"),
     type: text("type").$type<"photo" | "video">().notNull(),
     caption: text("caption").notNull().default(""),
     sizeBytes: integer("size_bytes").notNull(),

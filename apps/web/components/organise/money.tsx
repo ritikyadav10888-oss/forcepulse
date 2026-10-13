@@ -12,6 +12,7 @@ interface Finance {
   collectedPaise: number;
   platformFeePaise: number;
   organiserSharePaise: number;
+  refundedPaise: number;
   paidOutPaise: number;
   netPayablePaise: number;
   payouts: { id: string; sequence: number; amountPaise: number | null; status: string; reference: string | null }[];
@@ -63,7 +64,7 @@ export function MoneyTab({ t }: TabProps) {
               {stat("Still to be paid to you", fin.netPayablePaise)}
             </div>
             <p className="text-sm text-muted">
-              {fin.payments} payment(s). Platform fee {rupees(fin.platformFeePaise)}. Paid out so far {rupees(fin.paidOutPaise)}. When the tournament is completed, contact Force Pulse to receive your payout.
+              {fin.payments} payment(s). Platform fee {rupees(fin.platformFeePaise)}. Refunded {rupees(fin.refundedPaise)}. Paid out so far {rupees(fin.paidOutPaise)}. When the tournament is completed, contact Force Pulse to receive your payout.
             </p>
             {fin.payouts.length ? (
               <ul className="divide-y divide-line border-y border-line text-sm">

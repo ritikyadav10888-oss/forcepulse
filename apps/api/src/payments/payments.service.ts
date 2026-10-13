@@ -5,6 +5,7 @@ import {
   enrollments,
   FEE_SETTINGS_KEY,
   paymentItems,
+  refunds,
   payments,
   payouts,
   settings,
@@ -22,7 +23,8 @@ import { AuctionService } from "../auction/auction.service";
 import { RealtimeGateway } from "../realtime.gateway";
 import { RegistrationsService } from "../registrations/registrations.service";
 import type { GatewayPayment, PaymentGateway } from "./gateway";
-import { postTransaction } from "./ledger";
+import { organiserBalance, postTransaction } from "./ledger";
+import { receiptPdf } from "./receipt-pdf";
 
 type PaymentRow = typeof payments.$inferSelect;
 
@@ -248,6 +250,51 @@ export class PaymentsService {
     return problems.length ? problems.join("; ") : null;
   }
 
+  /**
+   * The organiser refunds one paid entry before payout (FR-PAY-14). The player gets back the organiser's share of that
+   * entry (97%); the platform fee and the convenience fee are never refunded (FR-PAY-13). Once the money has been paid
+   * out to the organiser, refunds are theirs to handle outside Force Pulse.
+   */
+  async refundEntry(auth: AuthContext, enrollmentId: string, reason: string) {
+    const [e] = await this.db.select().from(enrollments).where(eq(enrollments.id, enrollmentId));
+    if (!e) throw new ApiError("NOT_FOUND", "No such entry.");
+    const [t] = await this.db.select().from(tournaments).where(eq(tournaments.id, e.tournamentId));
+    if (t.organiserUserId !== auth.userId && !auth.roles.includes("super_admin")) throw new ApiError("FORBIDDEN", "Only this tournament's organiser can refund its entries.");
+    if (e.paymentStatus === "refunded") throw new ApiError("CONFLICT", "This entry has already been refunded.");
+    if (e.paymentStatus !== "paid") throw new ApiError("CONFLICT", "Only a paid entry can be refunded.");
+
+    const refund = await this.db.transaction(async (tx) => {
+      const [item] = await tx
+        .select({ fee: paymentItems.feePaise, p: payments })
+        .from(paymentItems)
+        .innerJoin(payments, eq(payments.id, paymentItems.paymentId))
+        .where(and(eq(paymentItems.enrollmentId, e.id), eq(payments.status, "paid")))
+        .for("update");
+      if (!item?.p.razorpayPaymentId) throw new ApiError("CONFLICT", "No captured payment for this entry.");
+      const amount = splitEntryFee(item.fee, item.p.platformFeeBps).organiserShare;
+      if ((await organiserBalance(tx, t.id)) < amount) {
+        throw new ApiError("CONFLICT", "Your share has already been paid out to you, so please refund this player directly.");
+      }
+      // shortcut: the Razorpay call runs inside the transaction so a failed refund records nothing; add Razorpay's
+      // refund idempotency header if a commit failure after a successful refund ever needs ruling out.
+      const gr = await this.gateway.refund(item.p.razorpayPaymentId, amount, { enrollmentId: e.id, registrationNo: e.registrationNo });
+      const [row] = await tx
+        .insert(refunds)
+        .values({ paymentId: item.p.id, enrollmentId: e.id, amountPaise: amount, razorpayRefundId: gr.id, status: gr.status === "failed" ? "failed" : "processed", reason, byUserId: auth.userId, createdAt: this.clock.now() })
+        .returning();
+      await postTransaction(tx, [
+        { account: "organiser_payable", debit: amount, tournamentId: t.id, paymentId: item.p.id, memo: `Refund ${e.registrationNo}` },
+        { account: "razorpay_clearing", credit: amount, paymentId: item.p.id, memo: `Refund ${gr.id}` },
+      ]);
+      await tx.update(enrollments).set({ paymentStatus: "refunded" }).where(eq(enrollments.id, e.id));
+      await this.audit.record({ entity: "enrollment", entityId: e.id, action: "refund", after: { amountPaise: amount, razorpayRefundId: gr.id }, reason, userId: auth.userId }, tx);
+      return row;
+    });
+    // The entry leaves the tournament too, freeing its place for the waitlist.
+    if (e.status !== "removed") await this.registrations.remove(auth, e.id, `Refunded: ${reason}`);
+    return { ...refund, createdAt: refund.createdAt.toISOString() };
+  }
+
   // ---------- Reading ----------
 
   async get(auth: AuthContext, id: string) {
@@ -263,7 +310,23 @@ export class PaymentsService {
   }
 
   /** Printable receipt (FR-PAY-09). HTML for now; the browser's "Save as PDF" makes the PDF. */
-  async receiptHtml(auth: AuthContext, id: string): Promise<string> {
+  /** The same receipt as a PDF to save or print (FR-PAY-09). */
+  async receiptPdf(auth: AuthContext, id: string): Promise<Buffer> {
+    const { p, t, lines } = await this.receiptData(auth, id);
+    return receiptPdf({
+      tournamentName: t.name,
+      organiserContact: [t.contactName, t.contactPhone].filter(Boolean).join(" "),
+      paidAt: p.paidAt ? new Date(p.paidAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "",
+      method: p.method ?? "",
+      razorpayPaymentId: p.razorpayPaymentId ?? p.id,
+      lines: lines.map((l) => ({ label: `${l.registrationNo} · ${l.sportId}`, feePaise: l.fee })),
+      entryFeePaise: p.entryFeePaise,
+      convenienceFeePaise: p.convenienceFeePaise ?? 0,
+      totalPaise: p.amountPaidPaise ?? 0,
+    });
+  }
+
+  private async receiptData(auth: AuthContext, id: string) {
     const p = await this.get(auth, id);
     if (p.status !== "paid") throw new ApiError("CONFLICT", "A receipt is available once the payment is complete.");
     const [t] = await this.db.select().from(tournaments).where(eq(tournaments.id, p.tournamentId));
@@ -273,6 +336,11 @@ export class PaymentsService {
       .innerJoin(enrollments, eq(enrollments.id, paymentItems.enrollmentId))
       .innerJoin(tournamentEvents, eq(tournamentEvents.id, enrollments.eventId))
       .where(eq(paymentItems.paymentId, id));
+    return { p, t, lines };
+  }
+
+  async receiptHtml(auth: AuthContext, id: string): Promise<string> {
+    const { p, t, lines } = await this.receiptData(auth, id);
     const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
     const row = (a: string, b: string) => `<tr><td>${esc(a)}</td><td style="text-align:right">${esc(b)}</td></tr>`;
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Receipt ${esc(p.razorpayPaymentId ?? p.id)}</title>
@@ -316,10 +384,16 @@ ${row("Entry fees", formatInr(p.entryFeePaise))}${row("Convenience fee", formatI
       .where(and(eq(payments.tournamentId, tournamentId), eq(payments.status, "paid"), eq(payments.purpose, "registration")));
     const schedule = await this.db.select().from(payouts).where(eq(payouts.tournamentId, tournamentId)).orderBy(payouts.sequence);
     const paidOut = schedule.filter((p) => p.status === "paid" || p.status === "processing").reduce((s, p) => s + (p.amountPaise ?? 0), 0);
+    const [{ refunded }] = await this.db
+      .select({ refunded: sql<number>`coalesce(sum(${refunds.amountPaise}), 0)::int` })
+      .from(refunds)
+      .innerJoin(payments, eq(payments.id, refunds.paymentId))
+      .where(and(eq(payments.tournamentId, tournamentId), eq(refunds.status, "processed")));
     return {
       ...totals,
+      refundedPaise: refunded,
       paidOutPaise: paidOut,
-      netPayablePaise: totals.organiserSharePaise - paidOut,
+      netPayablePaise: totals.organiserSharePaise - refunded - paidOut,
       payouts: schedule.map((p) => ({ ...p, createdAt: p.createdAt.toISOString(), processedAt: p.processedAt?.toISOString() ?? null })),
     };
   }

@@ -11,6 +11,7 @@ export interface MediaItem {
   type: "photo" | "video";
   caption: string;
   url: string;
+  thumbUrl: string | null;
 }
 export const mediaUrl = (path: string) => PUBLIC_API_URL.replace(/\/api\/v1\/?$/, "") + path;
 
@@ -53,7 +54,13 @@ export function GalleryTab({ t }: TabProps) {
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {items.map((m) => (
           <li key={m.id} className="overflow-hidden rounded-lg border border-line bg-white">
-            {m.type === "video" ? <video src={mediaUrl(m.url)} controls preload="metadata" className="aspect-square w-full object-cover" /> : <img src={mediaUrl(m.url)} alt={m.caption || "Tournament photo"} className="aspect-square w-full object-cover" />}
+            {m.type === "video" ? (
+              <video src={mediaUrl(m.url)} poster={m.thumbUrl ? mediaUrl(m.thumbUrl) : undefined} controls preload="none" className="aspect-square w-full object-cover" />
+            ) : (
+              <a href={mediaUrl(m.url)} target="_blank" rel="noreferrer">
+                <img src={mediaUrl(m.thumbUrl ?? m.url)} alt={m.caption || "Tournament photo"} loading="lazy" className="aspect-square w-full object-cover" />
+              </a>
+            )}
             <button onClick={() => void run(() => call(`/media/${m.id}`, { method: "DELETE" })).then(load)} className="w-full py-2 text-xs font-semibold text-bad">
               Remove
             </button>

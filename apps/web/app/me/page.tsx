@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Empty } from "@/components/bits";
 import { PayButton } from "@/components/pay";
+import { download } from "@/lib/download";
+import { rupees } from "@/lib/format";
 import { ApiError, type Tournament } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dateRange, statusLabel } from "@/lib/format";
@@ -38,11 +40,12 @@ const ENTRY: Record<string, string> = {
 };
 
 export default function AccountPage() {
-  const { user, loading, call, signOut } = useAuth();
+  const { user, loading, call, signOut, token } = useAuth();
   const router = useRouter();
   const [player, setPlayer] = useState<Player | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [mine, setMine] = useState<Tournament[]>([]);
+  const [paid, setPaid] = useState<{ id: string; status: string; amountPaidPaise: number | null; paidAt: string | null; purpose: string }[]>([]);
   const [casual, setCasual] = useState<{ matchId: string; name: string; status: string; homeScore: number | null; awayScore: number | null }[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +58,7 @@ export default function AccountPage() {
       setEntries(e);
       setMine(t);
       void call<typeof casual>("/me/casual-matches").then(setCasual);
+      void call<typeof paid>("/me/payments").then((ps) => setPaid(ps.filter((x) => x.status === "paid")));
     });
   }, [user, loading, call, router]);
 
@@ -113,6 +117,25 @@ export default function AccountPage() {
             </Empty>
           </div>
         )}
+
+        {paid.length ? (
+          <>
+            <h2 className="mt-10 text-xs font-bold uppercase tracking-wider text-muted">Receipts</h2>
+            <ul className="mt-2 divide-y divide-line border-y border-line">
+              {paid.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <span>
+                    <b className="tabular">{rupees(p.amountPaidPaise ?? 0)}</b>
+                    <span className="text-muted"> · {p.purpose === "auction_plan" ? "Auction plan" : "Entry fees"}{p.paidAt ? ` · ${new Date(p.paidAt).toLocaleDateString("en-IN")}` : ""}</span>
+                  </span>
+                  <button className="font-semibold text-navy underline" onClick={() => void download(`/payments/${p.id}/receipt.pdf`, token(), `force-pulse-receipt-${p.id.slice(0, 8)}.pdf`)}>
+                    Download PDF
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
 
         <div className="mt-10 flex items-center justify-between gap-3">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Casual matches</h2>

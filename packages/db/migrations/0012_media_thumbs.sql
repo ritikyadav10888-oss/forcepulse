@@ -1,0 +1,1 @@
+ALTER TABLE "competition"."media_items" ADD COLUMN "thumb_key" text;

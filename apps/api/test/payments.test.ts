@@ -84,6 +84,13 @@ describe("paying for an entry (FR-PAY-04 to 09, AC-02)", () => {
     const receipt = await as(player).get(`/payments/${order.paymentId}/receipt`).expect(200);
     expect(receipt.text).toContain("₹1,023.60");
     expect(receipt.text).toContain("₹23.60");
+    const pdf = await as(player)
+      .get(`/payments/${order.paymentId}/receipt.pdf`)
+      .buffer(true)
+      .parse((res, cb) => { const c: Buffer[] = []; res.on("data", (d: Buffer) => c.push(d)); res.on("end", () => cb(null, Buffer.concat(c))); })
+      .expect(200);
+    expect(pdf.headers["content-type"]).toBe("application/pdf");
+    expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
 
     const fin = await as(org).get(`/tournaments/${t.id}/finance`).expect(200);
     expect(fin.body).toMatchObject({ payments: 1, collectedPaise: 100_000, platformFeePaise: 3_000, organiserSharePaise: 97_000, netPayablePaise: 97_000 });
@@ -186,6 +193,37 @@ describe("configuration guard", () => {
     expect(() => loadConfig(env)).toThrow(/Live Razorpay keys/);
     expect(() => loadConfig({ ...env, RAZORPAY_KEY_ID: "rzp_test_abc" })).not.toThrow();
     expect(() => loadConfig({ ...env, RAZORPAY_KEY_ID: "rzp_test_abc", RAZORPAY_WEBHOOK_SECRET: undefined })).toThrow(/all three/);
+  });
+});
+
+describe("organiser refunds before payout (FR-PAY-13/14)", () => {
+  it("refunds the organiser's 97% of an entry, never the platform or convenience fee, and only until payout", async () => {
+    const { org, t } = await paidTournament({ fee: 100_000 });
+    const a = await registerAndOrder(t);
+    const b = await registerAndOrder(t);
+    for (const o of [a, b]) {
+      const { webhook: w } = h.gateway.pay(o.order.razorpayOrderId);
+      await webhook(w.body, w.signature).expect(200);
+    }
+
+    await as(a.player).post(`/enrollments/${a.enrollmentId}/refund`, { reason: "Injured" }).expect(403);
+    const r = (await as(org).post(`/enrollments/${a.enrollmentId}/refund`, { reason: "Injured before the event" }).expect(200)).body;
+    expect(r).toMatchObject({ amountPaise: 97_000, status: "processed", razorpayRefundId: expect.stringMatching(/^rfnd_/) });
+    expect(h.gateway.refunds.at(-1)).toMatchObject({ amount: 97_000 });
+    expect(await ledgerBalanced(a.order.paymentId)).toBe(true);
+
+    const mine = (await as(a.player).get("/me/enrollments")).body[0];
+    expect(mine).toMatchObject({ status: "removed", paymentStatus: "refunded" });
+    expect((await as(org).post(`/enrollments/${a.enrollmentId}/refund`, { reason: "again" }).expect(409)).body.message).toMatch(/already been refunded/);
+
+    const fin = (await as(org).get(`/tournaments/${t.id}/finance`).expect(200)).body;
+    expect(fin).toMatchObject({ organiserSharePaise: 2 * 97_000, refundedPaise: 97_000, netPayablePaise: 97_000 });
+
+    // After the payout, refunds are the organiser's to handle outside Force Pulse.
+    for (const status of ["enrollment_closed", "fixtures_published", "live", "completed"]) await as(org).put(`/tournaments/${t.id}/status`, { status }).expect(200);
+    const admin = await staffSignIn(h);
+    await as(admin).post(`/admin/tournaments/${t.id}/payouts`).expect(201);
+    expect((await as(org).post(`/enrollments/${b.enrollmentId}/refund`, { reason: "Late request" }).expect(409)).body.message).toMatch(/paid out/);
   });
 });
 

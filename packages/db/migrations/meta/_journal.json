@@ -85,6 +85,20 @@
       "when": 1791886314528,
       "tag": "0011_pages_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791887324528,
+      "tag": "0012_media_thumbs",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791887417945,
+      "tag": "0013_refunds",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { hmacHex, safeEqualHex, type GatewayOrder, type GatewayPayment, type PaymentGateway } from "../src/payments/gateway";
+import { hmacHex, safeEqualHex, type GatewayOrder, type GatewayPayment, type GatewayRefund, type PaymentGateway } from "../src/payments/gateway";
 
 /**
  * Stands in for Razorpay in tests. Signs webhooks and checkout callbacks with the same HMAC
@@ -22,6 +22,16 @@ export class FakeGateway implements PaymentGateway {
     const p = this.payments.get(paymentId);
     if (!p) throw new Error(`fake: no payment ${paymentId}`);
     return p;
+  }
+
+  readonly refunds: (GatewayRefund & { paymentId: string })[] = [];
+  async refund(paymentId: string, amountPaise: number) {
+    const p = this.payments.get(paymentId);
+    const refunded = this.refunds.filter((r) => r.paymentId === paymentId).reduce((s, r) => s + r.amount, 0);
+    if (!p || p.status !== "captured" || refunded + amountPaise > p.amount) throw new Error("fake: refund not allowed");
+    const r = { id: `rfnd_FAKE${++this.seq}`, amount: amountPaise, status: "processed" as const, paymentId };
+    this.refunds.push(r);
+    return r;
   }
 
   verifyWebhook(rawBody: Buffer, signature: string) {

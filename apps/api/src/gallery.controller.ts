@@ -4,9 +4,12 @@ import { z } from "zod";
 import { mediaItems, tournaments, uploads, type Db } from "@force-pulse/db";
 import { ApiError } from "./common/api-error";
 import { Authenticated, CurrentAuth, Public, type AuthContext } from "./common/policy";
-import { DB } from "./common/tokens";
+import { randomCode } from "./common/codes";
+import { CLOCK, DB, FILE_STORE, type Clock } from "./common/tokens";
 import { parse } from "./common/validate";
 import { TournamentsService } from "./tournaments/tournaments.service";
+import type { FileStore } from "./uploads/file-store";
+import { makeThumbnail } from "./uploads/thumbnails";
 
 /** FR-MED-01: one gallery per tournament, at most this many photos and videos together. */
 export const GALLERY_LIMIT = 50;
@@ -19,6 +22,8 @@ const CaptionInput = z.object({ caption: z.string().trim().max(300) }).strict();
 export class GalleryController {
   constructor(
     @Inject(DB) private readonly db: Db,
+    @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(FILE_STORE) private readonly files: FileStore,
     private readonly tournaments: TournamentsService,
   ) {}
 
@@ -37,6 +42,7 @@ export class GalleryController {
   async add(@Param("id", ParseUUIDPipe) id: string, @Body() body: unknown, @CurrentAuth() auth: AuthContext) {
     const { uploadKey, caption } = parse(AddInput, body);
     await this.tournaments.manageable(auth, id);
+    const thumbKey = await this.thumbnail(auth, uploadKey);
     const row = await this.db.transaction(async (tx) => {
       // Lock the tournament so two uploads at once can't both take the 50th place.
       await tx.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.id, id)).for("update");
@@ -46,7 +52,7 @@ export class GalleryController {
       if (!file) throw new ApiError("BAD_REQUEST", "Upload the photo or video first (kind \"media\"), then add it.");
       const [item] = await tx
         .insert(mediaItems)
-        .values({ tournamentId: id, uploadKey, type: file.mime.startsWith("video/") ? "video" : "photo", caption, sizeBytes: file.sizeBytes, uploadedByUserId: auth.userId })
+        .values({ tournamentId: id, uploadKey, thumbKey, type: file.mime.startsWith("video/") ? "video" : "photo", caption, sizeBytes: file.sizeBytes, uploadedByUserId: auth.userId })
         .onConflictDoNothing()
         .returning();
       if (!item) throw new ApiError("CONFLICT", "This file is already in a gallery.");
@@ -73,6 +79,18 @@ export class GalleryController {
     await this.db.delete(mediaItems).where(eq(mediaItems.id, item.id));
   }
 
+  /** Makes and stores the preview before the gallery transaction, so slow image work holds no lock. */
+  private async thumbnail(auth: AuthContext, uploadKey: string): Promise<string | null> {
+    const [file] = await this.db.select().from(uploads).where(and(eq(uploads.key, uploadKey), eq(uploads.ownerUserId, auth.userId), eq(uploads.kind, "media")));
+    const bytes = file ? await this.files.get(uploadKey) : null;
+    const thumb = bytes ? await makeThumbnail(bytes, file.mime) : null;
+    if (!thumb) return null;
+    const key = `upl_${randomCode(24, "abcdefghijklmnopqrstuvwxyz0123456789")}`;
+    await this.files.put(key, thumb);
+    await this.db.insert(uploads).values({ key, ownerUserId: auth.userId, kind: "photo", mime: "image/webp", sizeBytes: thumb.length, createdAt: this.clock.now() });
+    return key;
+  }
+
   private async item(auth: AuthContext, id: string) {
     const [item] = await this.db.select().from(mediaItems).where(eq(mediaItems.id, id));
     if (!item) throw new ApiError("NOT_FOUND", "No such gallery item.");
@@ -82,5 +100,5 @@ export class GalleryController {
 }
 
 function view(m: typeof mediaItems.$inferSelect) {
-  return { ...m, url: `/api/v1/uploads/${m.uploadKey}`, createdAt: m.createdAt.toISOString() };
+  return { ...m, url: `/api/v1/uploads/${m.uploadKey}`, thumbUrl: m.thumbKey ? `/api/v1/uploads/${m.thumbKey}` : null, createdAt: m.createdAt.toISOString() };
 }
