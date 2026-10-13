@@ -20,7 +20,7 @@ export function GalleryTab({ t }: TabProps) {
   const { call, token } = useAuth();
   const [items, setItems] = useState<MediaItem[]>([]);
   const [limit, setLimit] = useState(50);
-  const { busy, error, run } = useAction();
+  const { busy, error, ok, run } = useAction();
   const load = useCallback(() => void call<{ limit: number; items: MediaItem[] }>(`/tournaments/${t.id}/media`).then((r) => (setItems(r.items), setLimit(r.limit))), [call, t.id]);
   useEffect(load, [load]);
 
@@ -50,7 +50,8 @@ export function GalleryTab({ t }: TabProps) {
         </label>
       </div>
       <p className="text-xs text-muted">Photos up to 5 MB, videos (MP4/MOV) up to 20 MB.</p>
-      <Message error={error} />
+      <p className="text-xs text-muted">To show awards, upload the photo and caption it, for example &quot;Best Player: Rohan Nair&quot;.</p>
+      <Message error={error} ok={ok} />
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {items.map((m) => (
           <li key={m.id} className="overflow-hidden rounded-lg border border-line bg-white">
@@ -61,6 +62,14 @@ export function GalleryTab({ t }: TabProps) {
                 <img src={mediaUrl(m.thumbUrl ?? m.url)} alt={m.caption || "Tournament photo"} loading="lazy" className="aspect-square w-full object-cover" />
               </a>
             )}
+            <input
+              aria-label="Caption"
+              defaultValue={m.caption}
+              placeholder="Caption, e.g. Best Player: Rohan Nair"
+              maxLength={300}
+              onBlur={(e) => e.target.value !== m.caption && void run(() => call(`/media/${m.id}`, { method: "PATCH", body: { caption: e.target.value } }), "Caption saved.").then(load)}
+              className="w-full border-t border-line px-2 py-2 text-xs"
+            />
             <button onClick={() => void run(() => call(`/media/${m.id}`, { method: "DELETE" })).then(load)} className="w-full py-2 text-xs font-semibold text-bad">
               Remove
             </button>

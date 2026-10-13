@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TournamentLive } from "@/components/tournament-live";
-import { publicGet, type Match, type StandingGroup, type Tournament } from "@/lib/api";
+import { PUBLIC_API_URL, publicGet, type Match, type StandingGroup, type Tournament } from "@/lib/api";
 import { dateRange, rupees, sportName, statusLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function TournamentPage({ params }: Props) {
   const t = await publicGet<Tournament>(`/tournaments/${(await params).id}`);
   if (!t) notFound();
-  const [matches, standings] = await Promise.all([publicGet<Match[]>(`/tournaments/${t.id}/matches`), publicGet<StandingGroup[]>(`/tournaments/${t.id}/standings`)]);
+  const [matches, standings, gallery] = await Promise.all([
+    publicGet<Match[]>(`/tournaments/${t.id}/matches`),
+    publicGet<StandingGroup[]>(`/tournaments/${t.id}/standings`),
+    publicGet<{ items: { id: string; type: "photo" | "video"; caption: string; url: string; thumbUrl: string | null }[] }>(`/tournaments/${t.id}/media`),
+  ]);
+  const file = (p: string) => PUBLIC_API_URL.replace(/\/api\/v1\/?$/, "") + p;
 
   return (
     <>
@@ -45,6 +50,28 @@ export default async function TournamentPage({ params }: Props) {
       </section>
       {t.description ? <p className="mt-6 max-w-prose whitespace-pre-line">{t.description}</p> : null}
       <TournamentLive tournamentId={t.id} matches={matches ?? []} standings={standings ?? []} />
+      {gallery?.items.length ? (
+        <section className="mt-12">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Gallery</h2>
+          <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {gallery.items.map((m) => (
+              <li key={m.id} className="overflow-hidden rounded-lg border border-line bg-white">
+                {m.type === "video" ? (
+                  <video src={file(m.url)} poster={m.thumbUrl ? file(m.thumbUrl) : undefined} controls preload="none" className="aspect-square w-full object-cover" />
+                ) : (
+                  <a href={file(m.url)} target="_blank" rel="noreferrer">
+                    <img src={file(m.thumbUrl ?? m.url)} alt={m.caption || "Tournament photo"} loading="lazy" className="aspect-square w-full object-cover" />
+                  </a>
+                )}
+                {m.caption ? <p className="px-2 py-1.5 text-xs font-semibold">{m.caption}</p> : null}
+                <a href={`https://wa.me/?text=${encodeURIComponent(`${m.caption || t.name}: ${file(m.url)}`)}`} target="_blank" rel="noreferrer" className="block px-2 pb-2 text-xs font-semibold text-navy underline">
+                  Share
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </>
   );
 }
