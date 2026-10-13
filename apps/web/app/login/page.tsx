@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { apiFetch, ApiError, PUBLIC_API_URL } from "@/lib/api";
+import { Message } from "@/components/form";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -25,8 +26,8 @@ function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function sendCode(e: FormEvent) {
-    e.preventDefault();
+  async function sendCode(e?: FormEvent) {
+    e?.preventDefault();
     setBusy(true);
     setError(null);
     try {
@@ -69,58 +70,109 @@ function Login() {
     }
   }
 
-  const input = "mt-1 h-12 w-full rounded-lg border border-line bg-white px-3 text-lg tabular";
+  const input = "h-12 w-full rounded-lg border border-line bg-white px-3 text-lg tabular focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20";
+  const primary = "h-12 w-full rounded-lg bg-navy font-semibold text-white hover:bg-navy/90 disabled:opacity-50";
   return (
-    <section className="mx-auto max-w-sm pt-14">
-      <h1 className="font-score text-4xl font-bold uppercase tracking-wide">Log in</h1>
-      {step === "phone" ? (
-        <form onSubmit={sendCode} className="mt-6">
-          <label htmlFor="phone" className="text-sm font-semibold">
-            Mobile number
-          </label>
-          <input id="phone" type="tel" inputMode="numeric" autoComplete="tel-national" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" className={input} />
-          <p className="mt-2 text-sm text-muted">We'll text you a 6-digit code. New here? This creates your player account.</p>
-          <p className="mt-2 text-xs text-muted">
-            By continuing you agree to our{" "}
-            <a href="/pages/terms" className="underline">terms</a> and <a href="/pages/privacy" className="underline">privacy policy</a>.
-          </p>
-          {error ? <p role="alert" className="mt-3 text-sm font-semibold text-bad">{error}</p> : null}
-          <button disabled={busy} className="mt-6 h-12 w-full rounded-lg bg-navy font-semibold text-white hover:bg-navy/90 disabled:opacity-60">
-            {busy ? "Sending…" : "Send code"}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={verify} className="mt-6">
-          <label htmlFor="code" className="text-sm font-semibold">
-            Code sent to {phone}
-          </label>
-          <input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required autoFocus value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className={`${input} tracking-[0.4em]`} />
-          {devCode ? <p className="mt-2 text-sm text-muted">Development server: your code is <span className="font-bold tabular text-ink">{devCode}</span></p> : null}
-          {error ? <p role="alert" className="mt-3 text-sm font-semibold text-bad">{error}</p> : null}
-          <button disabled={busy || code.length !== 6} className="mt-6 h-12 w-full rounded-lg bg-navy font-semibold text-white hover:bg-navy/90 disabled:opacity-60">
-            {busy ? "Checking…" : "Log in"}
-          </button>
-          <button type="button" onClick={() => (setStep("phone"), setCode(""), setError(null))} className="mt-3 w-full text-sm font-semibold text-navy underline">
-            Use a different number
-          </button>
-        </form>
-      )}
-      <details className="mt-10 border-t border-line pt-4 text-sm">
-        <summary className="cursor-pointer font-semibold text-navy">Force Pulse staff</summary>
-        <form onSubmit={staff} className="mt-4 space-y-3">
-          <label className="block font-semibold">
-            Email
-            <input name="email" type="email" autoComplete="username" required className={input} />
-          </label>
-          <label className="block font-semibold">
-            Password
-            <input name="password" type="password" autoComplete="current-password" required className={input} />
-          </label>
-          <button disabled={busy} className="h-12 w-full rounded-lg border border-navy font-semibold text-navy hover:bg-line/40 disabled:opacity-60">
-            Staff log in
-          </button>
-        </form>
-      </details>
+    <section className="py-10 sm:py-16">
+      <div className="mx-auto grid max-w-4xl overflow-hidden rounded-2xl border border-line bg-white shadow-sm md:grid-cols-2">
+        <div className="hidden flex-col justify-between bg-navy p-10 text-white md:flex">
+          <div>
+            <p className="font-score text-5xl font-bold uppercase leading-[0.95] tracking-wide">
+              Every match.
+              <br />
+              Live.
+            </p>
+            <ul className="mt-8 space-y-3 text-white/85">
+              {["Register for tournaments in minutes", "Follow scores point by point", "Your matches, wins and badges in one profile"].map((t) => (
+                <li key={t} className="flex gap-3">
+                  <span aria-hidden className="mt-2 size-2 shrink-0 rounded-full bg-white/60" />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-sm text-white/60">No password needed. We send a code to your phone.</p>
+        </div>
+
+        <div className="p-6 sm:p-10">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted">Step {step === "phone" ? 1 : 2} of 2</p>
+          <h1 className="mt-1 font-score text-4xl font-bold uppercase tracking-wide">{step === "phone" ? "Log in" : "Enter code"}</h1>
+          <p className="mt-1 text-sm text-muted">{step === "phone" ? "Players and organisers log in with their mobile number." : `We sent a 6-digit code to +91 ${phone}.`}</p>
+
+          {step === "phone" ? (
+            <form onSubmit={sendCode} className="mt-8">
+              <label htmlFor="phone" className="text-sm font-semibold">
+                Mobile number
+              </label>
+              <div className="mt-1 flex">
+                <span className="grid place-items-center rounded-l-lg border border-r-0 border-line bg-cream px-3 text-lg text-muted">+91</span>
+                <input id="phone" type="tel" inputMode="numeric" autoComplete="tel-national" required autoFocus value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" className={`${input} rounded-l-none`} />
+              </div>
+              <p className="mt-2 text-sm text-muted">New here? This creates your player account.</p>
+              <div className="mt-4">
+                <Message error={error} />
+              </div>
+              <button disabled={busy} className={`mt-4 ${primary}`}>
+                {busy ? "Sending…" : "Send code"}
+              </button>
+              <p className="mt-4 text-xs text-muted">
+                By continuing you agree to our{" "}
+                <a href="/pages/terms" className="underline">
+                  terms
+                </a>{" "}
+                and{" "}
+                <a href="/pages/privacy" className="underline">
+                  privacy policy
+                </a>
+                .
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={verify} className="mt-8">
+              <label htmlFor="code" className="text-sm font-semibold">
+                6-digit code
+              </label>
+              <input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required autoFocus value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="••••••" className={`mt-1 ${input} text-center text-2xl tracking-[0.5em]`} />
+              {devCode ? (
+                <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-sm text-muted">
+                  Development server: your code is <span className="font-bold tabular text-ink">{devCode}</span>
+                </p>
+              ) : null}
+              <div className="mt-4">
+                <Message error={error} />
+              </div>
+              <button disabled={busy || code.length !== 6} className={`mt-4 ${primary}`}>
+                {busy ? "Checking…" : "Log in"}
+              </button>
+              <div className="mt-4 flex justify-between text-sm font-semibold text-navy">
+                <button type="button" onClick={() => (setStep("phone"), setCode(""), setError(null))} className="underline">
+                  Change number
+                </button>
+                <button type="button" disabled={busy} onClick={() => sendCode()} className="underline disabled:opacity-50">
+                  Send a new code
+                </button>
+              </div>
+            </form>
+          )}
+
+          <details className="mt-10 border-t border-line pt-4 text-sm">
+            <summary className="cursor-pointer font-semibold text-muted hover:text-navy">Force Pulse staff log in</summary>
+            <form onSubmit={staff} className="mt-4 space-y-3">
+              <label className="block font-semibold">
+                Email
+                <input name="email" type="email" autoComplete="username" required className={`mt-1 ${input} text-base`} />
+              </label>
+              <label className="block font-semibold">
+                Password
+                <input name="password" type="password" autoComplete="current-password" required className={`mt-1 ${input} text-base`} />
+              </label>
+              <button disabled={busy} className="h-12 w-full rounded-lg border border-navy font-semibold text-navy hover:bg-line/40 disabled:opacity-50">
+                Staff log in
+              </button>
+            </form>
+          </details>
+        </div>
+      </div>
     </section>
   );
 }
