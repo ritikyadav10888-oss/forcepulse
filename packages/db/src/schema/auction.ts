@@ -89,6 +89,8 @@ export const auctionLots = auction.table(
     soldPoints: integer("sold_points"),
     soldAt: timestamp("sold_at", { withTimezone: true }),
     position: integer("position").notNull().default(0),
+    /** Kept by a team at a fixed price before bidding starts (FR-AUC-08); never undone by "undo last sale". */
+    retained: boolean("retained").notNull().default(false),
   },
   (t) => [uniqueIndex("lots_auction_player").on(t.auctionId, t.playerId)],
 );

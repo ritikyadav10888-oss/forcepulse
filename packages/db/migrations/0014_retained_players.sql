@@ -1,0 +1,1 @@
+ALTER TABLE "auction"."lots" ADD COLUMN "retained" boolean DEFAULT false NOT NULL;

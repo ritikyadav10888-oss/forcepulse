@@ -26,14 +26,19 @@ const pairs = (text: string) =>
 export function AuctionSetup({ state: s, reload }: { state: AuctionState; reload: () => Promise<void> }) {
   const { user, call } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [pool, setPool] = useState<{ playerId: string; name: string; lotCategoryId: string | null }[]>([]);
+  const [pool, setPool] = useState<{ playerId: string; name: string; lotCategoryId: string | null; retainedBy: string | null; retainedPoints: number | null }[]>([]);
   const [placed, setPlaced] = useState<Record<string, string>>({});
+  const [retain, setRetain] = useState<Record<string, { teamId: string; points: string }>>({});
   const { busy, error, ok, run } = useAction();
 
   useEffect(() => {
     void apiFetch<Plan[]>("/auction-plans", { base: PUBLIC_API_URL }).then(setPlans);
     if (s.status === "setup")
-      void call<typeof pool>(`/auctions/${s.id}/pool`).then((p) => (setPool(p), setPlaced(Object.fromEntries(p.filter((x) => x.lotCategoryId).map((x) => [x.playerId, x.lotCategoryId!])))));
+      void call<typeof pool>(`/auctions/${s.id}/pool`).then((p) => {
+        setPool(p);
+        setPlaced(Object.fromEntries(p.filter((x) => x.lotCategoryId).map((x) => [x.playerId, x.lotCategoryId!])));
+        setRetain(Object.fromEntries(p.filter((x) => x.retainedBy).map((x) => [x.playerId, { teamId: x.retainedBy!, points: String(x.retainedPoints ?? "") }])));
+      });
   }, [call, s.id, s.status]);
 
   const after = (r: unknown) => r !== undefined && void reload();
@@ -160,21 +165,36 @@ export function AuctionSetup({ state: s, reload }: { state: AuctionState; reload
         {!s.categories.length ? <p className="text-sm text-muted">Save rules with categories first.</p> : null}
         <ul className="divide-y divide-line border-y border-line text-sm">
           {pool.map((p) => (
-            <li key={p.playerId} className="flex items-center justify-between gap-3 py-2">
+            <li key={p.playerId} className="flex flex-wrap items-center justify-between gap-3 py-2">
               <span className="font-semibold">{p.name || "Unnamed player"}</span>
+              <span className="flex flex-wrap items-center gap-2">
+              {placed[p.playerId] && s.teams.length ? (
+                <>
+                  <select aria-label={`Retained by`} value={retain[p.playerId]?.teamId ?? ""} onChange={(e) => setRetain({ ...retain, [p.playerId]: { teamId: e.target.value, points: retain[p.playerId]?.points ?? "" } })} className="h-10 rounded-lg border border-line bg-white px-2">
+                    <option value="">Not retained</option>
+                    {s.teams.map((t) => (
+                      <option key={t.id} value={t.id}>Retained by {t.name}</option>
+                    ))}
+                  </select>
+                  {retain[p.playerId]?.teamId ? (
+                    <input aria-label="Retained for points" type="number" min={1} placeholder="Points" value={retain[p.playerId].points} onChange={(e) => setRetain({ ...retain, [p.playerId]: { ...retain[p.playerId], points: e.target.value } })} className="h-10 w-28 rounded-lg border border-line bg-white px-2" />
+                  ) : null}
+                </>
+              ) : null}
               <select aria-label={`Category for ${p.name}`} value={placed[p.playerId] ?? ""} onChange={(e) => setPlaced({ ...placed, [p.playerId]: e.target.value })} className="h-10 rounded-lg border border-line bg-white px-2">
                 <option value="">Not in the auction</option>
                 {s.categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              </span>
             </li>
           ))}
         </ul>
         <button
           disabled={busy || !s.categories.length}
           className={btnGhost}
-          onClick={() => void run(() => call(`/auctions/${s.id}/lots`, { method: "PUT", body: { lots: Object.entries(placed).filter(([, c]) => c).map(([playerId, categoryId]) => ({ playerId, categoryId })) } }), "Players placed.").then(after)}
+          onClick={() => void run(() => call(`/auctions/${s.id}/lots`, { method: "PUT", body: { lots: Object.entries(placed).filter(([, c]) => c).map(([playerId, categoryId]) => ({ playerId, categoryId, retain: retain[playerId]?.teamId ? { teamId: retain[playerId].teamId, points: Number(retain[playerId].points) } : null })) } }), "Players placed.").then(after)}
         >
           Save player categories
         </button>

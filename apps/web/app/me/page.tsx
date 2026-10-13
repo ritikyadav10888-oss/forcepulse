@@ -46,6 +46,7 @@ export default function AccountPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [mine, setMine] = useState<Tournament[]>([]);
   const [paid, setPaid] = useState<{ id: string; status: string; amountPaidPaise: number | null; paidAt: string | null; purpose: string }[]>([]);
+  const [auctions, setAuctions] = useState<{ auctionId: string; tournamentName: string; label: string; category: string; basePoints: number; team: string | null; points: number | null }[]>([]);
   const [casual, setCasual] = useState<{ matchId: string; name: string; status: string; homeScore: number | null; awayScore: number | null }[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export default function AccountPage() {
       setEntries(e);
       setMine(t);
       void call<typeof casual>("/me/casual-matches").then(setCasual);
+      void call<typeof auctions>("/me/auctions").then(setAuctions);
       void call<typeof paid>("/me/payments").then((ps) => setPaid(ps.filter((x) => x.status === "paid")));
     });
   }, [user, loading, call, router]);
@@ -131,6 +133,28 @@ export default function AccountPage() {
                   <button className="font-semibold text-navy underline" onClick={() => void download(`/payments/${p.id}/receipt.pdf`, token(), `force-pulse-receipt-${p.id.slice(0, 8)}.pdf`)}>
                     Download PDF
                   </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+
+        {auctions.length ? (
+          <>
+            <h2 className="mt-10 text-xs font-bold uppercase tracking-wider text-muted">My auctions</h2>
+            <ul className="mt-2 divide-y divide-line border-y border-line">
+              {auctions.map((a) => (
+                <li key={a.auctionId}>
+                  <Link href={`/auctions/${a.auctionId}`} className="flex items-center justify-between gap-3 py-3 text-sm hover:bg-line/40">
+                    <span>
+                      <b>{a.tournamentName}</b>
+                      <span className="text-muted"> · {a.category} · base {a.basePoints.toLocaleString("en-IN")}</span>
+                    </span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${a.label === "Sold" || a.label === "Retained" || a.label === "Under auction" ? "bg-gold text-ink" : "bg-white"}`}>
+                      {a.label}
+                      {a.team ? ` · ${a.team} · ${(a.points ?? 0).toLocaleString("en-IN")} pts` : ""}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

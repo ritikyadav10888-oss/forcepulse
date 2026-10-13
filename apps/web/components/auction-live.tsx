@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { download } from "@/lib/download";
 import { useLive } from "@/lib/live";
 import { btn, btnDanger, btnGhost, Message, useAction } from "./form";
 
@@ -25,7 +26,7 @@ export interface AuctionState {
   teams: { id: string; name: string; ownerUserId: string | null; pointsLeft: number; players: number; slotsLeft: number }[];
   current: { lotId: string; name: string; photoUrl: string; category: string; basePoints: number; round: number } | null;
   bids: { teamId: string; points: number; floor: boolean; at: string }[];
-  lots: { lotId: string; name: string; category: string; status: string; soldTeamId: string | null; soldPoints: number | null }[];
+  lots: { lotId: string; name: string; category: string; status: string; soldTeamId: string | null; soldPoints: number | null; retained: boolean }[];
 }
 
 const pts = (n: number | null | undefined) => (n ?? 0).toLocaleString("en-IN");
@@ -46,7 +47,7 @@ function useCountdown(s: AuctionState) {
 /** The live room (FR-AUC-09 to 18). Every update carries the full state, so screens never drift. */
 export function AuctionLive({ initial, auctioneer, projector }: { initial: AuctionState; auctioneer: boolean; projector: boolean }) {
   const s = useLive<AuctionState>(`auction:${initial.id}`, "auction.updated", initial);
-  const { user, call } = useAuth();
+  const { user, call, token } = useAuth();
   const { busy, error, run } = useAction();
   const left = useCountdown(s);
   const team = (id: string | null) => s.teams.find((t) => t.id === id)?.name ?? "";
@@ -110,6 +111,14 @@ export function AuctionLive({ initial, auctioneer, projector }: { initial: Aucti
                 <button className={btnDanger} disabled={busy} onClick={() => confirm("Close the auction? Sold players join their teams.") && act("close")}>Close auction</button>
               </>
             ) : null}
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <span className="font-semibold">Download results:</span>
+            {(["pdf", "xlsx", "csv"] as const).map((x) => (
+              <button key={x} className="font-semibold text-navy underline" onClick={() => void run(() => download(`/auctions/${s.id}/export.${x}`, token(), `auction-results.${x}`))}>
+                {x === "xlsx" ? "Excel" : x.toUpperCase()}
+              </button>
+            ))}
           </div>
           {s.current && s.status === "live" ? (
             <div className="flex flex-wrap gap-2">

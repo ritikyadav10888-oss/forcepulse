@@ -27,6 +27,7 @@ import { RealtimeGateway } from "../realtime.gateway";
 import { RolesService } from "../roles/roles.service";
 import { TournamentsService } from "../tournaments/tournaments.service";
 import { checkBid, nextBid } from "./bid-rules";
+import { auctionPdf, auctionXlsx } from "./export";
 
 type AuctionRow = typeof auctions.$inferSelect;
 
@@ -175,7 +176,7 @@ export class AuctionService implements OnModuleInit, OnModuleDestroy {
   async pool(auth: AuthContext, id: string) {
     const a = await this.auctioneer(this.db, auth, id);
     return this.db
-      .select({ playerId: players.id, enrollmentId: enrollments.id, name: players.name, photoUrl: players.photoUrl, gender: players.gender, lotCategoryId: auctionLots.categoryId })
+      .select({ playerId: players.id, enrollmentId: enrollments.id, name: players.name, photoUrl: players.photoUrl, gender: players.gender, lotCategoryId: auctionLots.categoryId, retainedBy: auctionLots.soldTeamId, retainedPoints: auctionLots.soldPoints })
       .from(enrollments)
       .innerJoin(players, eq(players.id, enrollments.playerId))
       .leftJoin(auctionLots, and(eq(auctionLots.auctionId, id), eq(auctionLots.playerId, enrollments.playerId)))
@@ -183,18 +184,42 @@ export class AuctionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** FR-AUC-05: every auctioned player goes into a category. Replaces the list while in setup. */
-  async setLots(auth: AuthContext, id: string, list: { playerId: string; categoryId: string }[]) {
+  /**
+   * FR-AUC-05 and FR-AUC-08: every auctioned player goes into a category; a player may be retained by a team at a fixed
+   * price, entering the auction already sold. Retentions must leave each team able to fill its minimum squad.
+   */
+  async setLots(auth: AuthContext, id: string, list: { playerId: string; categoryId: string; retain?: { teamId: string; points: number } | null }[]) {
     await this.db.transaction(async (tx) => {
       const a = await this.auctioneer(tx, auth, id);
       if (a.status !== "setup") throw new ApiError("CONFLICT", "Players can be placed only during setup.");
       const pool = await tx.select({ playerId: enrollments.playerId, enrollmentId: enrollments.id }).from(enrollments).where(this.poolWhere(a));
-      const cats = new Set((await tx.select({ id: auctionCategories.id }).from(auctionCategories).where(eq(auctionCategories.auctionId, id))).map((c) => c.id));
+      const catRows = await tx.select().from(auctionCategories).where(eq(auctionCategories.auctionId, id));
+      const cats = new Set(catRows.map((c) => c.id));
+      const teamRows = await tx.select().from(auctionTeams).where(eq(auctionTeams.auctionId, id));
+      const now = this.clock.now();
       const rows = list.map((l, i) => {
         const entry = pool.find((p) => p.playerId === l.playerId);
         if (!entry) throw new ApiError("BAD_REQUEST", "Someone in the list isn't in this auction's pool.");
         if (!cats.has(l.categoryId)) throw new ApiError("BAD_REQUEST", "Unknown category.");
-        return { auctionId: id, playerId: l.playerId, enrollmentId: entry.enrollmentId, categoryId: l.categoryId, position: i };
+        const base = { auctionId: id, playerId: l.playerId, enrollmentId: entry.enrollmentId, categoryId: l.categoryId, position: i };
+        if (!l.retain) return base;
+        if (!teamRows.some((t) => t.id === l.retain!.teamId)) throw new ApiError("BAD_REQUEST", "A retained player's team isn't in this auction.");
+        return { ...base, status: "sold" as const, retained: true, soldTeamId: l.retain.teamId, soldPoints: l.retain.points, soldAt: now };
       });
+      // Each team: retained players fit the squad, the quotas and the purse, with enough left for the minimum squad.
+      const lowestBase = Math.min(...catRows.map((c) => c.basePoints));
+      for (const t of teamRows) {
+        const kept = rows.filter((r) => "retained" in r && r.soldTeamId === t.id) as { soldPoints: number; categoryId: string }[];
+        if (!kept.length) continue;
+        const spent = kept.reduce((s, r) => s + r.soldPoints, 0);
+        if (kept.length > a.maxSquad) throw new ApiError("BAD_REQUEST", `${t.name} retains more players than its squad allows.`);
+        for (const c of catRows) {
+          if (c.quotaPerTeam !== null && kept.filter((r) => r.categoryId === c.id).length > c.quotaPerTeam) throw new ApiError("BAD_REQUEST", `${t.name} retains more ${c.name} players than the quota.`);
+        }
+        if (spent + Math.max(0, a.minSquad - kept.length) * lowestBase > a.purse) {
+          throw new ApiError("BAD_REQUEST", `${t.name}'s retentions leave too few points to fill its minimum squad.`);
+        }
+      }
       await tx.delete(auctionLots).where(eq(auctionLots.auctionId, id));
       if (rows.length) await tx.insert(auctionLots).values(rows);
     });
@@ -319,7 +344,7 @@ export class AuctionService implements OnModuleInit, OnModuleDestroy {
       const a = await this.auctioneer(tx, auth, id);
       if (a.status !== "live" && a.status !== "paused") throw new ApiError("CONFLICT", "Only during the auction.");
       if (a.currentLotId) throw new ApiError("CONFLICT", "Finish the player on the block first.");
-      const [last] = await tx.select().from(auctionLots).where(and(eq(auctionLots.auctionId, id), eq(auctionLots.status, "sold"))).orderBy(desc(auctionLots.soldAt)).limit(1);
+      const [last] = await tx.select().from(auctionLots).where(and(eq(auctionLots.auctionId, id), eq(auctionLots.status, "sold"), eq(auctionLots.retained, false))).orderBy(desc(auctionLots.soldAt)).limit(1);
       if (!last) throw new ApiError("CONFLICT", "Nothing has been sold yet.");
       await tx.update(auctionLots).set({ status: "upcoming", soldTeamId: null, soldPoints: null, soldAt: null }).where(eq(auctionLots.id, last.id));
       await this.audit.record({ entity: "auction_lot", entityId: last.id, action: "undo_sale", before: { teamId: last.soldTeamId, points: last.soldPoints }, reason, userId: auth.userId }, tx);
@@ -456,8 +481,18 @@ export class AuctionService implements OnModuleInit, OnModuleDestroy {
         status: l.lot.status,
         soldTeamId: l.lot.soldTeamId,
         soldPoints: l.lot.soldPoints,
+        retained: l.lot.retained,
       })),
     };
+  }
+
+  /** FR-AUC-20: squads, points spent and sold / unsold lists as a PDF or an Excel workbook. */
+  async exportFile(auth: AuthContext, id: string, format: "pdf" | "xlsx"): Promise<Buffer> {
+    await this.auctioneer(this.db, auth, id, false);
+    const v = await this.view(id);
+    const [t] = await this.db.select({ name: tournaments.name }).from(tournaments).where(eq(tournaments.id, v.tournamentId));
+    const data = { title: t.name, purse: v.purse, teams: v.teams, lots: v.lots };
+    return format === "pdf" ? auctionPdf(data) : auctionXlsx(data);
   }
 
   async exportCsv(auth: AuthContext, id: string): Promise<string> {
@@ -467,6 +502,32 @@ export class AuctionService implements OnModuleInit, OnModuleDestroy {
     const cell = (s: string) => (/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""');
     const lines = v.lots.map((l) => [l.name, l.category, l.status, team(l.soldTeamId), l.soldPoints ?? ""].map((x) => `"${cell(String(x))}"`).join(","));
     return ["Player,Category,Status,Team,Points", ...lines].join("\r\n") + "\r\n";
+  }
+
+  /** FR-AUC-18: where the signed-in player stands in each auction: in pool, under auction, sold (team, points) or unsold. */
+  async mine(auth: AuthContext) {
+    const [me] = await this.db.select({ id: players.id }).from(players).where(eq(players.userId, auth.userId));
+    if (!me) return [];
+    const rows = await this.db
+      .select({
+        auctionId: auctions.id,
+        auctionStatus: auctions.status,
+        tournamentName: tournaments.name,
+        lotStatus: auctionLots.status,
+        retained: auctionLots.retained,
+        category: auctionCategories.name,
+        basePoints: auctionCategories.basePoints,
+        team: auctionTeams.name,
+        points: auctionLots.soldPoints,
+      })
+      .from(auctionLots)
+      .innerJoin(auctions, eq(auctions.id, auctionLots.auctionId))
+      .innerJoin(tournaments, eq(tournaments.id, auctions.tournamentId))
+      .innerJoin(auctionCategories, eq(auctionCategories.id, auctionLots.categoryId))
+      .leftJoin(auctionTeams, eq(auctionTeams.id, auctionLots.soldTeamId))
+      .where(eq(auctionLots.playerId, me.id));
+    const label = { upcoming: "In pool", live: "Under auction", sold: "Sold", unsold: "Unsold" } as const;
+    return rows.map(({ lotStatus, ...r }) => ({ ...r, status: lotStatus, label: r.retained ? "Retained" : label[lotStatus] }));
   }
 
   async forTournament(tournamentId: string, viewer?: AuthContext) {

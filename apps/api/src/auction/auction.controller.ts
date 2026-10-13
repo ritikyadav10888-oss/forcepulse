@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Put } from "@nestjs/common";
+import { Body, Controller, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Put, StreamableFile } from "@nestjs/common";
 import { z } from "zod";
 import { Authenticated, CurrentAuth, Public, RequireRole, type AuthContext } from "../common/policy";
 import { parse } from "../common/validate";
@@ -19,7 +19,13 @@ const ConfigInput = z
   })
   .strict();
 const TeamInput = z.object({ name: z.string().trim().min(1).max(60), logoUrl: z.string().max(500).default(""), ownerPhone: z.string().max(20).nullable().default(null) }).strict();
-const LotsInput = z.object({ lots: z.array(z.object({ playerId: z.uuid(), categoryId: z.uuid() }).strict()).max(1000) }).strict();
+const LotsInput = z
+  .object({
+    lots: z
+      .array(z.object({ playerId: z.uuid(), categoryId: z.uuid(), retain: z.object({ teamId: z.uuid(), points: Points.min(1) }).strict().nullable().optional() }).strict())
+      .max(1000),
+  })
+  .strict();
 const PlanInput = z.object({ planId: z.enum(["starter", "standard", "pro", "premium"]) }).strict();
 
 @Controller()
@@ -62,6 +68,12 @@ export class AuctionController {
   }
 
   /** Bidder screens, projector and public view (FR-AUC-10, 17, 18). */
+  @Get("me/auctions")
+  @RequireRole("player")
+  mine(@CurrentAuth() auth: AuthContext) {
+    return this.auctions.mine(auth);
+  }
+
   @Get("auctions/:id")
   @Public()
   get(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth?: AuthContext) {
@@ -155,6 +167,21 @@ export class AuctionController {
   @Authenticated()
   close(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth: AuthContext) {
     return this.auctions.close(auth, id);
+  }
+
+  @Get("auctions/:id/export.pdf")
+  @Authenticated()
+  async exportPdf(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth: AuthContext) {
+    return new StreamableFile(await this.auctions.exportFile(auth, id, "pdf"), { type: "application/pdf", disposition: 'attachment; filename="auction-results.pdf"' });
+  }
+
+  @Get("auctions/:id/export.xlsx")
+  @Authenticated()
+  async exportXlsx(@Param("id", ParseUUIDPipe) id: string, @CurrentAuth() auth: AuthContext) {
+    return new StreamableFile(await this.auctions.exportFile(auth, id, "xlsx"), {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: 'attachment; filename="auction-results.xlsx"',
+    });
   }
 
   @Get("auctions/:id/export.csv")

@@ -165,3 +165,61 @@ describe("live auction (FR-AUC-09 to 20, AC-10)", () => {
     expect(csv).toContain('"Pool 1","Gold","sold","Strikers","12000"');
   });
 });
+
+const binary = (req: ReturnType<ReturnType<typeof as>["get"]>) =>
+  req.buffer(true).parse((res, cb) => {
+    const c: Buffer[] = [];
+    res.on("data", (d: Buffer) => c.push(d));
+    res.on("end", () => cb(null, Buffer.concat(c)));
+  });
+
+describe("retained players, player status, exports (FR-AUC-08, 18, 20)", () => {
+  it("a retained player starts sold to their team, can't be undone, shows on the player's status, and exports to PDF and Excel", async () => {
+    const { org, players, auction } = await pooledTournament(3);
+    const admin = await staffSignIn(h);
+    await as(admin).post(`/admin/auctions/${auction.id}/plan`, { planId: "starter" }).expect(200);
+    await as(org)
+      .put(`/auctions/${auction.id}/config`, {
+        purse: 50_000,
+        minSquad: 2,
+        maxSquad: 3,
+        timerSeconds: 30,
+        slabs: [{ from: 0, raise: 1_000 }],
+        categories: [{ name: "Gold", basePoints: 10_000, quotaPerTeam: 1 }, { name: "Silver", basePoints: 5_000 }],
+      })
+      .expect(200);
+    const teamA = (await as(org).post(`/auctions/${auction.id}/teams`, { name: "Strikers" }).expect(201)).body.teams[0];
+    await as(org).post(`/auctions/${auction.id}/teams`, { name: "Titans" }).expect(201);
+    const [gold, silver] = (await h.http().get(`/api/v1/auctions/${auction.id}`)).body.categories;
+    const pool = (await as(org).get(`/auctions/${auction.id}/pool`)).body as { playerId: string; name: string }[];
+    const id = (name: string) => pool.find((p) => p.name === name)!.playerId;
+    const lots = (retainPoints: number) => ({
+      lots: [
+        { playerId: id("Pool 1"), categoryId: gold.id, retain: { teamId: teamA.id, points: retainPoints } },
+        { playerId: id("Pool 2"), categoryId: silver.id },
+        { playerId: id("Pool 3"), categoryId: silver.id },
+      ],
+    });
+
+    // 48,000 + one more player at the 5,000 minimum is more than the 50,000 purse.
+    expect((await as(org).put(`/auctions/${auction.id}/lots`, lots(48_000)).expect(400)).body.message).toMatch(/minimum squad/);
+    const set = (await as(org).put(`/auctions/${auction.id}/lots`, lots(20_000)).expect(200)).body;
+    expect(set.teams.find((t: { id: string }) => t.id === teamA.id)).toMatchObject({ pointsLeft: 30_000, players: 1 });
+
+    expect((await as(players[0]).get("/me/auctions").expect(200)).body).toEqual([expect.objectContaining({ label: "Retained", team: "Strikers", points: 20_000, category: "Gold" })]);
+    expect((await as(players[1]).get("/me/auctions")).body[0].label).toBe("In pool");
+
+    await as(org).post(`/auctions/${auction.id}/start`).expect(200);
+    expect((await as(org).post(`/auctions/${auction.id}/undo`, { reason: "test undo" }).expect(409)).body.message).toMatch(/Nothing has been sold/);
+    const live = (await as(org).post(`/auctions/${auction.id}/next`, { lotId: null }).expect(200)).body;
+    const onBlock = players[Number(live.current.name.replace("Pool ", "")) - 1]; // "Pool 2" is players[1]
+    expect((await as(onBlock).get("/me/auctions")).body[0].label).toBe("Under auction");
+
+    const pdf = await binary(as(org).get(`/auctions/${auction.id}/export.pdf`)).expect(200);
+    expect(pdf.headers["content-type"]).toBe("application/pdf");
+    expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
+    const xlsx = await binary(as(org).get(`/auctions/${auction.id}/export.xlsx`)).expect(200);
+    expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe("PK"); // an .xlsx is a zip
+    await as(players[0]).get(`/auctions/${auction.id}/export.pdf`).expect(403);
+  });
+});
