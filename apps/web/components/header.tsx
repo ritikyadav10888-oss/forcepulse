@@ -42,7 +42,7 @@ export function Header() {
             <Link href="/me" className="hidden rounded-md px-3 py-2 hover:bg-line/60 sm:inline">
               <span className="text-muted">{user.roleLabel || "Account"}</span>
             </Link>
-          ) : path === "/login" ? null : (
+          ) : path === "/login" || path === "/staff/login" ? null : (
             <Link href="/login" className="rounded-md bg-navy px-4 py-2 text-white hover:bg-navy/90">
               Log in
             </Link>

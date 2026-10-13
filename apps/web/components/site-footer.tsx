@@ -32,7 +32,12 @@ export function SiteFooter() {
         ))}
       </div>
       <div className="border-t border-white/15">
-        <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-white/70 sm:px-6">© {new Date().getFullYear()} Force Sports and Wears India. All rights reserved.</p>
+        <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-2 px-4 py-4 text-xs text-white/70 sm:px-6">
+          <p>© {new Date().getFullYear()} Force Sports and Wears India. All rights reserved.</p>
+          <Link href="/staff/login" className="hover:underline">
+            Staff login
+          </Link>
+        </div>
       </div>
     </footer>
   );

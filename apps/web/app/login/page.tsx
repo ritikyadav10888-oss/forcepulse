@@ -16,7 +16,7 @@ export default function LoginPage() {
 
 /** Mobile number, then the 6-digit code (FR-AUTH-01). New numbers become a player account. */
 function Login() {
-  const { signIn, staffSignIn } = useAuth();
+  const { signIn } = useAuth();
   const router = useRouter();
   const next = useSearchParams().get("next") ?? "/me";
   const [step, setStep] = useState<"phone" | "code">("phone");
@@ -48,21 +48,6 @@ function Login() {
     try {
       await signIn(phone, code);
       router.push(next.startsWith("/") ? next : "/me");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't sign in. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function staff(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    setBusy(true);
-    setError(null);
-    try {
-      await staffSignIn(String(f.get("email")), String(f.get("password")));
-      router.push("/admin");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't sign in. Try again.");
     } finally {
@@ -155,22 +140,6 @@ function Login() {
             </form>
           )}
 
-          <details className="mt-10 border-t border-line pt-4 text-sm">
-            <summary className="cursor-pointer font-semibold text-muted hover:text-navy">Force Pulse staff log in</summary>
-            <form onSubmit={staff} className="mt-4 space-y-3">
-              <label className="block font-semibold">
-                Email
-                <input name="email" type="email" autoComplete="username" required className={`mt-1 ${input} text-base`} />
-              </label>
-              <label className="block font-semibold">
-                Password
-                <input name="password" type="password" autoComplete="current-password" required className={`mt-1 ${input} text-base`} />
-              </label>
-              <button disabled={busy} className="h-12 w-full rounded-lg border border-navy font-semibold text-navy hover:bg-line/40 disabled:opacity-50">
-                Staff log in
-              </button>
-            </form>
-          </details>
         </div>
       </div>
     </section>

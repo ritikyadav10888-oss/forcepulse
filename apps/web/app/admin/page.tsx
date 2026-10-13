@@ -65,7 +65,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || user.platformRole === "player") return router.replace("/login?next=/admin");
+    if (!user || user.platformRole === "player") return router.replace("/staff/login");
     load();
   }, [user, loading, router, load]);
 
