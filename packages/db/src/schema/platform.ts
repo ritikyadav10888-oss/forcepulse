@@ -1,4 +1,4 @@
-import { bigserial, index, integer, jsonb, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, boolean, index, integer, jsonb, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./identity";
 
 export const platform = pgSchema("platform");
@@ -29,4 +29,34 @@ export const uploads = platform.table("uploads", {
   mime: text("mime").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** About, FAQ, terms, privacy and refund pages, edited by staff (FR-ABT-01/02). Body is simple markdown. */
+export const cmsPages = platform.table("cms_pages", {
+  slug: text("slug").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+});
+
+/** Messages from the contact form (FR-ABT-01). */
+export const contactMessages = platform.table("contact_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  contact: text("contact").notNull(),
+  message: text("message").notNull(),
+  handled: boolean("handled").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** DPDP Act 2023 requests (NFR-10). Deletion anonymises the account; payment records are kept as the law requires. */
+export const privacyRequests = platform.table("privacy_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  kind: text("kind").$type<"deletion">().notNull(),
+  reason: text("reason").notNull().default(""),
+  status: text("status").$type<"pending" | "done" | "declined">().notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
 });

@@ -80,6 +80,10 @@ function Login() {
           </label>
           <input id="phone" type="tel" inputMode="numeric" autoComplete="tel-national" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" className={input} />
           <p className="mt-2 text-sm text-muted">We'll text you a 6-digit code. New here? This creates your player account.</p>
+          <p className="mt-2 text-xs text-muted">
+            By continuing you agree to our{" "}
+            <a href="/pages/terms" className="underline">terms</a> and <a href="/pages/privacy" className="underline">privacy policy</a>.
+          </p>
           {error ? <p role="alert" className="mt-3 text-sm font-semibold text-bad">{error}</p> : null}
           <button disabled={busy} className="mt-6 h-12 w-full rounded-lg bg-navy font-semibold text-white hover:bg-navy/90 disabled:opacity-60">
             {busy ? "Sending…" : "Send code"}

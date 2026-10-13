@@ -188,6 +188,30 @@ export default function AccountPage() {
             <p className="text-xs text-muted">Your date of birth and pincode are never shown on your public profile.</p>
           </form>
         ) : null}
+        <h2 className="mt-10 text-xs font-bold uppercase tracking-wider text-muted">Your data</h2>
+        <div className="mt-2 space-y-2 text-sm">
+          <button
+            className="block font-semibold text-navy underline"
+            onClick={() =>
+              void call("/me/data").then((d) => {
+                const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: "application/json" })), download: "force-pulse-my-data.json" });
+                a.click();
+              })
+            }
+          >
+            Download my data
+          </button>
+          <button
+            className="block font-semibold text-bad underline"
+            onClick={() => {
+              if (!confirm("Ask Force Pulse to delete your account? Your profile will be removed and you will be signed out. Payment records are kept as the law requires.")) return;
+              const reason = prompt("Anything you'd like to tell us? (optional)") ?? "";
+              void call("/me/deletion-request", { method: "POST", body: { reason } }).then(() => setSaved("Deletion requested. We'll process it shortly."));
+            }}
+          >
+            Delete my account
+          </button>
+        </div>
         <button onClick={() => void signOut().then(() => router.push("/"))} className="mt-8 text-sm font-semibold text-navy underline">
           Log out
         </button>

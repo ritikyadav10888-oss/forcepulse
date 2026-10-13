@@ -37,6 +37,7 @@ import { RegistrationsService } from "./registrations/registrations.service";
 import { ScoringController } from "./scoring/scoring.controller";
 import { CasualService } from "./scoring/casual.service";
 import { ScoringService } from "./scoring/scoring.service";
+import { SiteController } from "./site.controller";
 import { SportsController } from "./sports/sports.controller";
 import { TournamentsController } from "./tournaments/tournaments.controller";
 import { TournamentsService } from "./tournaments/tournaments.service";
@@ -76,6 +77,7 @@ export class AppModule {
         GalleryController,
         ScoringController,
         AuctionController,
+        SiteController,
       ],
       providers: [
         { provide: CONFIG, useValue: deps.config },

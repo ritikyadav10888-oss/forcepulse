@@ -66,6 +66,8 @@ export function suggestedFields(): FieldDef[] {
     { key: "jersey_size", label: "Jersey size", type: "select", required: false, options: ["XS", "S", "M", "L", "XL", "XXL"] },
     { key: "jersey_number", label: "Jersey number", type: "number", required: false, min: 0, max: 99 },
     { key: "auction_opt_in", label: "Put me in the player auction", type: "yesno", required: false },
+    // NFR-10: consent recorded with every registration under the DPDP Act.
+    { key: "privacy_consent", label: "I agree to the Force Pulse terms and privacy policy, and to the organiser using my details to run this tournament", type: "consent", required: true },
   ];
 }
 

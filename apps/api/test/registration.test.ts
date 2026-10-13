@@ -96,7 +96,7 @@ describe("form builder and registration link (FR-REG-02 to 05, AC-01)", () => {
     await api(null).get("/pincodes/012345").expect(400);
 
     const player = await person();
-    const answers = { full_name: "Ravi Kumar", gender: "Male", dob: "2000-04-04", mobile: "9876500000", pincode: "400001" };
+    const answers = { full_name: "Ravi Kumar", gender: "Male", dob: "2000-04-04", mobile: "9876500000", pincode: "400001", privacy_consent: true };
     await api(player).post(`/tournaments/${t.id}/registrations`, { entries: [{ eventId: t.events[0].id }], answers }).expect(201);
     const me = await api(player).get("/me/player").expect(200);
     expect(me.body).toMatchObject({ name: "Ravi Kumar", gender: "male", dob: "2000-04-04", pincode: "400001", city: "Mumbai", state: "Maharashtra" });
@@ -109,7 +109,7 @@ describe("form builder and registration link (FR-REG-02 to 05, AC-01)", () => {
     await api(org).post(`/tournaments/${t.id}/form/publish`).expect(200);
     await api(org).put(`/tournaments/${t.id}/status`, { status: "enrollment_open" }).expect(200);
     const res = await api(await person()).post(`/tournaments/${t.id}/registrations`, { entries: [{ eventId: t.events[0].id }], answers: { pincode: "12" } }).expect(400);
-    expect(Object.keys(res.body.details.fields).sort()).toEqual(["dob", "full_name", "gender", "mobile", "pincode"]);
+    expect(Object.keys(res.body.details.fields).sort()).toEqual(["dob", "full_name", "gender", "mobile", "pincode", "privacy_consent"]);
   });
 
   it("refuses a broken form definition", async () => {

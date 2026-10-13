@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { AdminSite } from "@/components/admin-site";
 import { btn, btnGhost, Field, h2, input, Message, useAction } from "@/components/form";
 import { useAuth } from "@/lib/auth";
 import { rupees } from "@/lib/format";
@@ -211,6 +212,7 @@ export default function Admin() {
           ) : null}
         </div>
       ) : null}
+      <AdminSite superAdmin={superAdmin} />
     </div>
   );
 }

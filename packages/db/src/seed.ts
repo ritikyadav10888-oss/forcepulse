@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { DEFAULT_PLATFORM_FEE_BPS } from "@force-pulse/shared";
 import type { Db } from "./client";
+import { seedPages } from "./pages";
 import { auctionPlans, settings, sports, userRoles, users, type FeeSettings } from "./schema";
 
 /**
@@ -50,6 +51,7 @@ export async function seedReferenceData(db: Db): Promise<void> {
       { id: "premium", name: "Premium", maxTeams: 32 },
     ])
     .onConflictDoNothing();
+  await seedPages(db);
 }
 
 /** Creates the first super admin if no account has that email yet. Returns true when created. */
