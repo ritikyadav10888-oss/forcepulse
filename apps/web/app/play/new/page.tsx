@@ -8,9 +8,10 @@ import { useAuth } from "@/lib/auth";
 
 interface Side {
   name: string;
-  players: { phone: string; name: string }[];
+  players: { phone: string; name: string; editing: boolean }[];
 }
-const blank = (name: string, phone = ""): Side => ({ name, players: [{ phone, name: "" }] });
+const blank = (name: string, phone = ""): Side => ({ name, players: [{ phone, name: "", editing: !phone }] });
+const validPhone = (phone: string) => /^(\+?91)?\d{10}$/.test(phone.replace(/[\s-]/g, ""));
 
 /** A casual match (FR-SCR-05): pick a sport, set your rules, add both sides by mobile number, then score it. */
 export default function NewCasualMatch() {
@@ -29,6 +30,7 @@ export default function NewCasualMatch() {
 
   const setSide = (i: 0 | 1, patch: Partial<Side>) => setSides((s) => (i === 0 ? [{ ...s[0], ...patch }, s[1]] : [s[0], { ...s[1], ...patch }]));
   const setPlayer = (i: 0 | 1, k: number, patch: Partial<Side["players"][number]>) => setSide(i, { players: sides[i].players.map((p, j) => (j === k ? { ...p, ...patch } : p)) });
+  const removePlayer = (i: 0 | 1, k: number) => setSide(i, { players: sides[i].players.filter((_, j) => j !== k) });
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -79,14 +81,48 @@ export default function NewCasualMatch() {
             <Field label={i === 0 ? "Home side" : "Away side"}>
               <input value={sides[i].name} onChange={(e) => setSide(i, { name: e.target.value })} required className={input} />
             </Field>
-            {sides[i].players.map((p, k) => (
-              <div key={k} className="grid grid-cols-2 gap-2">
-                <input aria-label="Mobile" type="tel" placeholder="Mobile" value={p.phone} onChange={(e) => setPlayer(i, k, { phone: e.target.value })} className={input} />
-                <input aria-label="Name" placeholder="Name (if new)" value={p.name} onChange={(e) => setPlayer(i, k, { name: e.target.value })} className={input} />
-              </div>
-            ))}
-            <button type="button" className={btnGhost} onClick={() => setSide(i, { players: [...sides[i].players, { phone: "", name: "" }] })}>
-              Add player
+            <p className="text-xs font-bold uppercase tracking-wider text-muted">Players</p>
+            {sides[i].players.length === 0 ? <p className="text-sm text-muted">No players yet.</p> : null}
+            <ul className="space-y-2">
+              {sides[i].players.map((p, k) =>
+                p.editing ? (
+                  <li key={k} className="space-y-2 rounded-lg border border-navy/30 bg-cream/40 p-3">
+                    <div className="flex">
+                      <span className="grid place-items-center rounded-l-lg border border-r-0 border-line bg-cream px-3 text-sm text-muted">+91</span>
+                      <input aria-label={`Player ${k + 1} mobile`} type="tel" inputMode="numeric" autoComplete="off" placeholder="Mobile number" value={p.phone} onChange={(e) => setPlayer(i, k, { phone: e.target.value })} className={`${input} rounded-l-none`} />
+                    </div>
+                    <input aria-label={`Player ${k + 1} name`} placeholder="Name (needed if they're new)" value={p.name} onChange={(e) => setPlayer(i, k, { name: e.target.value })} className={input} />
+                    {p.phone && !validPhone(p.phone) ? <p className="text-xs text-red-700">Enter a 10-digit mobile number.</p> : null}
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => removePlayer(i, k)} className="rounded-md px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+                        Remove
+                      </button>
+                      <button type="button" disabled={!validPhone(p.phone)} onClick={() => setPlayer(i, k, { editing: false })} className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+                        Done
+                      </button>
+                    </div>
+                  </li>
+                ) : (
+                  <li key={k} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
+                    <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-navy font-semibold uppercase text-white">
+                      {(p.name.trim() || "?")[0]}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{p.name.trim() || "Existing player"}</span>
+                      <span className="block text-sm text-muted tabular">{p.phone}</span>
+                    </span>
+                    <button type="button" onClick={() => setPlayer(i, k, { editing: true })} aria-label={`Edit ${p.name || p.phone}`} className="rounded-md px-2 py-1 text-sm font-semibold text-navy hover:bg-line/60">
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => removePlayer(i, k)} aria-label={`Remove ${p.name || p.phone}`} className="rounded-md px-2 py-1 text-sm font-semibold text-red-700 hover:bg-red-50">
+                      Remove
+                    </button>
+                  </li>
+                ),
+              )}
+            </ul>
+            <button type="button" className={`${btnGhost} w-full`} onClick={() => setSide(i, { players: [...sides[i].players, { phone: "", name: "", editing: true }] })}>
+              + Add player
             </button>
           </section>
         ))}
